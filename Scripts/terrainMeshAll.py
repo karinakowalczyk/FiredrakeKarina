@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from firedrake import *
-import petsc4py.PETSc as PETSc
-PETSc.Sys.popErrorHandler()
+#import petsc4py.PETSc as PETSc
+#PETSc.Sys.popErrorHandler()
 
 ##############################################################################################
 #####################                    Piola                      ##########################
@@ -92,13 +92,13 @@ tauhat, vhat, gammar = TestFunctions(W_hybrid)
 
 wh = Function(W_hybrid)
 
-a_hybrid = (inner(sigmahat, tauhat) * dx + div(tauhat) * uhat * dx + div(sigmahat) * vhat * dx + vhat * uhat * dx
+a_hybrid = (inner(sigmahat, tauhat) * dx + div(tauhat) * uhat * dx - div(sigmahat) * vhat * dx + vhat * uhat * dx
             + inner(tauhat, n) * lambdar * (ds_b + ds_t + ds_v)
             + inner(sigmahat, n) * gammar * (ds_b + ds_t + ds_v)
             + jump(tauhat, n=n) * lambdar('+') * (dS_h + dS_v)
             + jump(sigmahat, n=n) * gammar('+') * (dS_h + dS_v))
 
-L = -f * vhat * dx
+L = f * vhat * dx
 
 scpc_parameters = {"ksp_type": "preonly", "pc_type": "lu"}
 

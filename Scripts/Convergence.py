@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from firedrake import *
-import petsc4py.PETSc as PETSc
-PETSc.Sys.popErrorHandler()
+#import petsc4py.PETSc as PETSc
+#PETSc.Sys.popErrorHandler()
 
 
 def SolveHelmholtzIdentityHybrid (NumberNodesX, NumberNodesY):
@@ -86,7 +86,8 @@ def SolveHelmholtzIdentityHybrid (NumberNodesX, NumberNodesY):
     return (uh, mesh, V, Sigmahat)
 
 
-######################################################################################################################
+
+####################################################################################################################
 
 
 
@@ -94,63 +95,49 @@ NumberX = 10
 NumberY = 5
 
 meshSizeList = []
+errorsL2Proj = []
 errorsL2 = []
-errorsH1 = []
-errorsL2_scaled_squared = []
-errorsL2_scaled_linear = []
-errorsH1_scaled = []
-
 
 
 for count in range(0,8):
+
     u_curr, mesh_curr, V_curr, Sigma_curr = SolveHelmholtzIdentityHybrid(NumberX, NumberY)
 
     x, y = SpatialCoordinate(mesh_curr)
     uexact = cos(2 * pi * x) * cos(2 * pi * y)
     sigmaexact = -2 * pi * as_vector((sin(2 * pi * x) * cos(2 * pi * y), cos(2 * pi * x) * sin(2 * pi * y)))
 
+    errorUL2 = norm(uexact - u_curr, norm_type="L2")
+
     sigmaexact = Function(Sigma_curr, name="sigmaexact").project(sigmaexact)
     uexact = Function(V_curr, name="Uexact").project(uexact)
 
-    differenceU =  uexact - u_curr
-    errorUL2 = norm(differenceU, norm_type="L2")
-    errorUH1 = norm(differenceU, norm_type="H1")
+    differenceUProj =  uexact - u_curr
+    errorUL2Proj = norm(differenceUProj, norm_type="L2")
+   # errorSig = assemble((Sigma_curr - sigmaexact)**2 * dx)
 
     h = 1/NumberY
-
     meshSizeList.append(h)
+    errorsL2Proj.append(errorUL2Proj)
     errorsL2.append(errorUL2)
-    errorsH1.append(errorUH1)
-    errorsL2_scaled_squared.append(errorUL2/h**2)
-    errorsL2_scaled_linear.append(errorUL2/h)
+
     NumberX *=2
     NumberY *=2
     print(h)
 
+######################################### results ###############################################################
+
+def square (h):
+    return h**2
+
+hsquared = list(map(square, meshSizeList))
+
 fig, axes = plt.subplots()
 axes.set_title("errors")
-plt.scatter(meshSizeList, errorsL2, axes = axes, color = "blue", label = "L2 error")
-plt.plot(meshSizeList, errorsL2, color = "blue")
-plt.scatter(meshSizeList, errorsH1, axes = axes, color = "orange", label = "H1 error")
-plt.plot(meshSizeList, errorsH1, color = "orange")
+plt.loglog(meshSizeList, errorsL2, axes = axes, color = "green", label = "L2 error", marker = ".")
+plt.loglog(meshSizeList, errorsL2Proj, axes = axes, color = "blue", label = "L2 error (project uexact first)", marker = ".")
+plt.loglog(meshSizeList, hsquared, axes = axes, color = "orange", label = "h^2", marker = ".")
+plt.loglog(meshSizeList, meshSizeList, axes = axes, color = "red", label = "h", marker = ".")
 axes.legend()
 fig.savefig("../Results/errors.png")
-
-
-fig, axes = plt.subplots()
-axes.set_title("errors scaled")
-plt.scatter(meshSizeList, errorsL2_scaled_linear, axes = axes, color = "blue", label = "L2 error/h")
-plt.plot(meshSizeList, errorsL2_scaled_linear, color = "blue")
-plt.scatter(meshSizeList, errorsL2_scaled_squared, axes = axes, color = "orange", label = "L2 error/h^2")
-plt.plot(meshSizeList, errorsL2_scaled_squared, color = "orange")
-axes.legend()
-fig.savefig("../Results/errorsScaled.png")
 plt.show()
-
-#fig, axes = plt.subplots()
-#axes.set_title("errors/h^2")
-#plt.scatter(meshSizeList, errorsL2/(h*h), axes = axes, color = "blue", label = "L2 error")
-#plt.plot(meshSizeList, errorsL2)
-#plt.scatter(meshSizeList, errorsH1/(h*h), axes = axes, color = "orange", label = "H1 error")
-#plt.plot(meshSizeList, errorsH1)
-#plt.show()
