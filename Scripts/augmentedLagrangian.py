@@ -3,12 +3,8 @@ from firedrake import *
 #import petsc4py.PETSc as PETSc
 #PETSc.Sys.popErrorHandler()
 
-##############################################################################################
-#####################                    Piola                      ##########################
-##############################################################################################
 
-
-##############     define mesh ######################################################################
+##############   define mesh ######################################################################
 
 m = IntervalMesh(10,2)
 mesh = ExtrudedMesh(m, 5, extrusion_type='uniform')
@@ -33,7 +29,7 @@ RT_horiz_broken = BrokenElement(RT_horiz)
 P0P1 = TensorProductElement(DG_0, CG_1)
 RT_vert = HDivElement(P0P1)
 RT_vert_broken = BrokenElement(RT_vert)
-full = EnrichedElement(RT_horiz_broken, RT_vert_broken)
+full = EnrichedElement(RT_horiz, RT_vert_broken)
 Sigma = FunctionSpace(mesh, full)
 remapped = WithMapping(full, "identity")
 Sigmahat = FunctionSpace(mesh, remapped)
@@ -53,8 +49,8 @@ f = 10 * exp(-100 * ((x - 1) ** 2 + (y - 0.5) ** 2))
 
 def eqn_sigmahat (tauhat):
     return( inner(sigmahat, tauhat) * dx + div(tauhat) * uhat * dx
-               + inner(tauhat, n) * lambdar * (ds_b + ds_t + ds_v)
-               + jump(tauhat, n=n) * lambdar('+') * (dS_h + dS_v)
+               + inner(tauhat, n) * lambdar * (ds_b + ds_t )
+               + jump(tauhat, n=n) * lambdar('+') * (dS_h)
                 )
 
 def eqn_uhat(vhat):
@@ -62,8 +58,8 @@ def eqn_uhat(vhat):
                 )
 
 def eqn_lamda(gammar):
-    return( + inner(sigmahat, n) * gammar * (ds_b + ds_t + ds_v)
-                + jump(sigmahat, n=n) * gammar('+') * (dS_h + dS_v)
+    return( + inner(sigmahat, n) * gammar * (ds_b + ds_t)
+                + jump(sigmahat, n=n) * gammar('+') * (dS_h)
                 )
 
 n = FacetNormal(mesh)
@@ -77,6 +73,9 @@ gamma = Constant(1000.0)
 a = eqn_sigmahat(tauhat) + eqn_uhat(vhat) + eqn_lamda(gammar) + gamma * eqn_uhat(div(tauhat))
 
 L =  f * vhat * dx(degree=(5, 5))
+
+bc0 = DirichletBC(W_hybrid.sub(0), 0, 1)
+bc1 = DirichletBC(W_hybrid.sub(0), 0, 2)
 
 sparameters = {
     "mat_type":"matfree",
@@ -112,6 +111,8 @@ topleft_LU = {
     "assembled_pc_factor_mat_solver_type": "mumps"
 }
 
+
+
 topleft_LS = {'pc_type': 'python',
               'pc_python_type': 'firedrake.ASMLinesmoothPC',
               'pc_linesmooth_codims': '1'}
@@ -141,7 +142,7 @@ topleft_MG = {
 }
 sparameters["fieldsplit_0"] = topleft_LU
 
-prob = LinearVariationalProblem(a, L, wh)
+prob = LinearVariationalProblem(a, L, wh, bcs = [bc0, bc1])
 solver = LinearVariationalSolver(prob, solver_parameters=sparameters)
 
 solver.solve()

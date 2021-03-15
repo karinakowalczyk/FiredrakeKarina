@@ -96,14 +96,22 @@ def SolveWithPiola(mesh):
 def SolveWithIdentity(mesh):
     #################### define Function Spaces ###########################################################################
 
-    element = FiniteElement("RTCF", cell="quadrilateral", degree=1)
-    element._mapping = 'identity'
-    Sigma = FunctionSpace(mesh, element)
-    V = FunctionSpace(mesh, "DQ", 0)
+    CG_1 = FiniteElement("CG", interval, 1)
+    DG_0 = FiniteElement("DG", interval, 0)
+    P1P0 = TensorProductElement(CG_1, DG_0)
+    RT_horiz = HDivElement(P1P0)
+    RT_horiz_broken = BrokenElement(RT_horiz)
+    P0P1 = TensorProductElement(DG_0, CG_1)
+    RT_vert = HDivElement(P0P1)
+    RT_vert_broken = BrokenElement(RT_vert)
+    full = EnrichedElement(RT_horiz_broken, RT_vert_broken)
+    Sigma = FunctionSpace(mesh, full)
+    remapped = WithMapping(full, "identity")
+    Sigmahat = FunctionSpace(mesh, remapped)
 
-    Sigmahat = FunctionSpace(mesh, BrokenElement(Sigma.ufl_element()))  # do I need broken element here??
-    V = FunctionSpace(mesh, V.ufl_element())
+    V = FunctionSpace(mesh, "DQ", 0)
     T = FunctionSpace(mesh, FiniteElement("HDiv Trace", mesh.ufl_cell(), degree=0))
+
     W_hybrid = Sigmahat * V * T
 
     n = FacetNormal(mesh)
@@ -196,7 +204,7 @@ def SolveWithIdentity_BrokenVertical(mesh):
     bc0 = DirichletBC(W.sub(0), sigmaexact, 1)
     bc1 = DirichletBC(W.sub(0), sigmaexact, 2)
 
-    a_hybrid_Identity = (inner(sigmahat, tauhat) * dx + div(tauhat) * uhat * dx
+    a_hybrid_Identity_BrokenVert = (inner(sigmahat, tauhat) * dx + div(tauhat) * uhat * dx
                 - div(sigmahat) * vhat * dx + vhat * uhat * dx
                 + inner(tauhat, n) * lambdar * (ds_b + ds_t)
                 + inner(sigmahat, n) * gammar * (ds_b + ds_t)
@@ -221,7 +229,7 @@ def SolveWithIdentity_BrokenVertical(mesh):
     scpc_parameters = {"ksp_type": "preonly", "pc_type": "lu"}
     parameters = {"pc_type":"lu", "pc_factor_mat_solver_type":"mumps", "ksp_type":"preonly"}
 
-    solve(lhs(a_hybrid_Identity) == rhs(a_hybrid_Identity), wh, solver_parameters=parameters, bcs = [bc0, bc1])
+    solve(lhs(a_hybrid_Identity_BrokenVert) == rhs(a_hybrid_Identity_BrokenVert), wh, solver_parameters=parameters, bcs = [bc0, bc1])
 
     sigmah, uh, lamdah = wh.split()
 
@@ -245,13 +253,13 @@ def SolveWithIdentity_BrokenVertical(mesh):
 
 ##############     define mesh ######################################################################
 
-m = IntervalMesh(40,2)
-mesh = ExtrudedMesh(m, 20, extrusion_type='uniform')
+m = IntervalMesh(10,2)
+mesh = ExtrudedMesh(m, 5, extrusion_type='uniform')
 
 Vc = mesh.coordinates.function_space()
 x, y = SpatialCoordinate(mesh)
 f_mesh = Function(Vc).interpolate(as_vector([x, y + ( 0.25 * x**4 -x**3 + x**2) * (1-y) ] ) )
-#mesh.coordinates.assign(f_mesh)
+mesh.coordinates.assign(f_mesh)
 
 xs = [mesh.coordinates.dat.data[i][0] for i in range(0,66)]
 ys = [mesh.coordinates.dat.data[i][1] for i in range(0,66)]
