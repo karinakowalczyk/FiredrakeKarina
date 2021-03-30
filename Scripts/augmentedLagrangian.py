@@ -106,8 +106,11 @@ topleft_LU = {
 
 
 topleft_LS = {'pc_type': 'python',
-              'pc_python_type': 'firedrake.ASMLinesmoothPC',
-              'pc_linesmooth_codims': '1'
+              "pc_python_type": "firedrake.AssembledPC",
+              "assembled_ksp_type": "preonly",
+              "assembled_pc_type": "python",
+              'assembled_pc_python_type': 'firedrake.ASMLinesmoothPC',
+              'assembled_pc_linesmooth_codims': '1'
               }
 
 topleft_MG = {
