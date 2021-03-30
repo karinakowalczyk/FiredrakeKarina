@@ -1,13 +1,13 @@
 import matplotlib.pyplot as plt
 from firedrake import *
-import petsc4py.PETSc as PETSc
-PETSc.Sys.popErrorHandler()
+#import petsc4py.PETSc as PETSc
+#PETSc.Sys.popErrorHandler()
 
 
 ##############   define mesh ######################################################################
 
-m = IntervalMesh(10,2)
-mesh = ExtrudedMesh(m, 5, extrusion_type='uniform')
+m = IntervalMesh(10,1)
+mesh = ExtrudedMesh(m, 5, layer_height=0.01, extrusion_type='uniform')
 
 Vc = mesh.coordinates.function_space()
 x, y = SpatialCoordinate(mesh)
@@ -133,36 +133,38 @@ topleft_MG = {
     "mg_levels_patch_sub_ksp_type": "preonly",
     "mg_levels_patch_sub_pc_type": "lu",
 }
-sparameters["fieldsplit_0"] = topleft_LS
+sparameters["fieldsplit_0"] = topleft_LU
 
 
-constant = 1000.0
+for count in range(10):
 
-gamma = Constant(constant)
+    constant = 1000.0 + count*1000.0
 
-a = eqn_sigmahat(tauhat) + eqn_uhat(vhat) + eqn_lamda(gammar) + gamma * eqn_uhat(div(tauhat))
+    gamma = Constant(constant)
 
-a-=  f * vhat * dx(degree=(5, 5))
+    a = eqn_sigmahat(tauhat) + eqn_uhat(vhat) + eqn_lamda(gammar) + gamma * eqn_uhat(div(tauhat))
 
-bc0 = DirichletBC(W_hybrid.sub(0), sigmaexact, 1)
-bc1 = DirichletBC(W_hybrid.sub(0), sigmaexact, 2)
+    a-=  f * vhat * dx(degree=(5, 5))
+
+    bc0 = DirichletBC(W_hybrid.sub(0), sigmaexact, 1)
+    bc1 = DirichletBC(W_hybrid.sub(0), sigmaexact, 2)
 
 
-ctx = {"mu": 1/gamma}
+    ctx = {"mu": 1/gamma}
 
-prob = LinearVariationalProblem(lhs(a), rhs(a), wh, bcs = [bc0, bc1])
-solver = LinearVariationalSolver(prob, solver_parameters=sparameters, appctx = ctx)
+    prob = LinearVariationalProblem(lhs(a), rhs(a), wh, bcs = [bc0, bc1])
+    solver = LinearVariationalSolver(prob, solver_parameters=sparameters, appctx = ctx)
 
-solver.solve()
+    solver.solve()
 
-sigmah, uh, lamdah = wh.split()
+    sigmah, uh, lamdah = wh.split()
 
-fig, axes = plt.subplots()
-quiver(sigmah, axes=axes)
-axes.set_aspect("equal")
-axes.set_title("$\sigma$")
+    fig, axes = plt.subplots()
+    quiver(sigmah, axes=axes)
+    axes.set_aspect("equal")
+    axes.set_title("$\sigma$")
 
-fig.savefig("../Results/sigmaAugLagrangian_"+ str(constant) + ".png")
+    fig.savefig("../Results/sigmaAugLagrangian_"+ str(constant) + ".png")
 
-file = File("../Results/augmentedLagrangian.pvd")
-file.write(sigmah, uh)
+    file = File("../Results/augmentedLagrangian.pvd")
+    file.write(sigmah, uh)
