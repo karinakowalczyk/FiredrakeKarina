@@ -29,6 +29,7 @@ S2 = fd.FiniteElement("DG", fd.interval, horizontal_degree)
 # vertical base spaces
 T0 = fd.FiniteElement("CG", fd.interval, vertical_degree+1)
 T1 = fd.FiniteElement("DG", fd.interval, vertical_degree)
+Tlinear = fd.FiniteElement("CG", fd.interval, 1)
 
 # build spaces V2, V3, Vt
 V2h_elt = fd.HDiv(fd.TensorProductElement(S1, T1))
@@ -38,6 +39,7 @@ V2v_elt = fd.HDiv(V2t_elt)
 V2v_elt_Broken = fd.BrokenElement(fd.HDiv(V2t_elt))
 #V2_elt = V2h_elt + V2v_elt
 V2_elt = fd.EnrichedElement(V2h_elt, V2v_elt_Broken)
+VT_elt = fd.TensorProductElement(S2, Tlinear)
 
 V1 = fd.FunctionSpace(mesh, V2_elt, name="HDiv")
 remapped = fd.WithMapping(V2_elt, "identity")
@@ -47,7 +49,7 @@ V2 = fd.FunctionSpace(mesh, V3_elt, name="DG")
 Vt = fd.FunctionSpace(mesh, V2t_elt, name="Temperature")
 Vv = fd.FunctionSpace(mesh, V2v_elt, name="Vv")
 
-T = fd.FunctionSpace(mesh, V2t_elt)
+T = fd.FunctionSpace(mesh, VT_elt)
 
 W = V1 * V2 * Vt * T #velocity, pressure, temperature, trace of velocity
 
