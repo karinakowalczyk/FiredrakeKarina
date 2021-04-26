@@ -105,6 +105,7 @@ def u_eqn(w, gammar):
 
 
         + dT*(fd.jump(unp1, n=n) * gammar('+') * (fd.dS_h) + fd.jump(w, n=n) * lamdanp1('+') * (fd.dS_h))
+        + dT*(fd.inner(unp1, n) * gammar * fd.ds_tb + fd.inner(w, n) * lamdanp1 * (fd.dS_tb))
 
         -dT*fd.div(w)*Pinph*fd.dx - dT*fd.inner(w, k)*bnph*fd.dx
         )
@@ -113,9 +114,7 @@ w, phi, q, gammar = fd.TestFunctions(W)
 gamma = fd.Constant(1000.0)
 eqn = u_eqn(w, gammar) + theta_eqn(q) + pi_eqn(phi) + gamma*pi_eqn(fd.div(w))
 
-bcs = [fd.DirichletBC(W.sub(0), 0., "top"),
-       fd.DirichletBC(W.sub(0), 0., "bottom")]
-nprob = fd.NonlinearVariationalProblem(eqn, Unp1, bcs=bcs)
+nprob = fd.NonlinearVariationalProblem(eqn, Unp1)
 luparams = {'snes_monitor':None,
     'mat_type':'aij',
     'ksp_type':'preonly',
