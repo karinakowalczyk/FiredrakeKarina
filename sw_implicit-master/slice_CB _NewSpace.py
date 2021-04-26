@@ -105,7 +105,7 @@ def u_eqn(w, gammar):
 
 
         + dT*(fd.jump(unp1, n=n) * gammar('+') * (fd.dS_h) + fd.jump(w, n=n) * lamdanp1('+') * (fd.dS_h))
-        + dT*(fd.inner(unp1, n) * gammar * fd.ds_tb + fd.inner(w, n) * lamdanp1 * (fd.dS_tb))
+        + dT*(fd.inner(unp1, n) * gammar * fd.ds_tb + fd.inner(w, n) * lamdanp1 * (fd.ds_tb))
 
         -dT*fd.div(w)*Pinph*fd.dx - dT*fd.inner(w, k)*bnph*fd.dx
         )
