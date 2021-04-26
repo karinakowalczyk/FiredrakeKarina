@@ -10,12 +10,13 @@ from firedrake import *
 
 ##############     define mesh ######################################################################
 
-m = IntervalMesh(10,2)
+m = IntervalMesh(10,1)
 mesh = ExtrudedMesh(m, 5, extrusion_type='uniform')
 
 Vc = mesh.coordinates.function_space()
 x, y = SpatialCoordinate(mesh)
-f_mesh = Function(Vc).interpolate(as_vector([x, y + ( 0.25 * x**4 -x**3 + x**2) * (1-y) ] ) )
+#f_mesh = Function(Vc).interpolate(as_vector([x, y + ( 0.25 * x**4 -x**3 + x**2) * (1-y) ] ) )
+f_mesh = Function(Vc).interpolate(as_vector([x,y - exp(-x**2/2)*((y-0.5)**2 -0.25)] ) )
 mesh.coordinates.assign(f_mesh)
 
 xs = [mesh.coordinates.dat.data[i][0] for i in range(0,66)]

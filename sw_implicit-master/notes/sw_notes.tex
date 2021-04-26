@@ -1,0 +1,375 @@
+\documentclass{article}
+\usepackage{amsmath,amssymb,graphicx}
+\def\MM#1{\boldsymbol{#1}}
+\newcommand{\pp}[2]{\frac{\partial #1}{\partial #2}} 
+\newcommand{\dede}[2]{\frac{\delta #1}{\delta #2}}
+\newcommand{\dd}[2]{\frac{\diff#1}{\diff#2}}
+\newcommand{\dt}[1]{\diff\!#1}
+\def\MM#1{\boldsymbol{#1}}
+\DeclareMathOperator{\diff}{d}
+%\DeclareMathOperator{\Re}{Re}
+%\DeclareMathOperator{\Im}{Im}
+\DeclareMathOperator{\DIV}{DIV}
+\DeclareMathOperator{\Hdiv}{H(div)}
+\DeclareMathOperator{\D}{D}
+\usepackage{natbib}
+\bibliographystyle{elsarticle-harv}
+\usepackage{helvet}
+\usepackage{amsfonts}
+\renewcommand{\familydefault}{\sfdefault} %% Only if the base font of the docume
+\newcommand{\vecx}[1]{\MM{#1}}
+\newtheorem{definition}{Definition}
+\newcommand{\code}[1]{{\ttfamily #1}} 
+\usepackage[margin=2cm]{geometry}
+
+\usepackage{fancybox}
+\begin{document}
+\title{Notes on Augmented Lagrangian preconditioning for GFD}
+\author{Tous Nous}
+\maketitle
+
+\section{Rotating shallow water}
+
+Say that we have a continuous time mixed FEM formulation for the
+rotating shallow water equations given by:
+find $(u,D)\in V_1\times V_2$ such that
+\begin{align}
+  \langle w, u_t \rangle + A(w; u) - \langle \nabla\cdot w, gD\rangle
+  & = 0, \quad \forall w \in V_1, \\
+  \langle \phi, D_t \rangle + B(\phi; u, D) & = 0, \quad \forall \phi\in V_2.
+\end{align}
+Here $A$ is the nonlinear velocity advection term 1-form and $B$ is
+the $D$ nonlinear advection 1-form.
+
+We discretise in time using the implicit midpoint rule (doesn't really matter
+which implicit scheme you use) to obtain: find $(u^{n+1},D^{n+1})
+\in V_1\times V_2$ such that
+\begin{align}
+  R_u(w;u^{n+1},D^{n+1}) = \langle w, u^{n+1}-u^n \rangle + \Delta t A(w; u)
+  + \Delta t\langle w, fu^{\perp}\rangle
+  - \Delta t\langle \nabla\cdot w, gD^{n+1/2}\rangle
+  & = 0, \quad \forall w \in V_1, \\
+  R_D(\phi; u^{n+1},D^{n+1}) = \langle \phi, D^{n+1} - D^n \rangle
+  + \Delta t B(\phi; u^{n+1/2},D^{n+1/2}) & = 0, \quad \forall \phi\in V_2,
+\end{align}
+where $u^{n+1/2} = (u^{n+1}+u^n)/2$, $D^{n+1/2}=(D^{n+1}+D^n)/2$.
+
+We now modify this formulation in augmented Lagrangian style so that
+it becomes: find $(u^{n+1},D^{n+1}) \in V_1\times V_2$ such that
+\begin{align}
+  \nonumber
+  \langle w, u^{n+1}-u^n \rangle + \Delta t A(w; u^{n+1/2})
+  + \Delta t\langle w, f(u^{n+1/2})^{\perp}\rangle
+  - \Delta t\langle \nabla\cdot w, gD^{n+1/2}\rangle & \\
+  \qquad + \gamma\left(
+  \langle \nabla\cdot w, D^{n+1} - D^n \rangle
+  + \Delta t B(\nabla\cdot w; u^{n+1/2},D^{n+1/2})
+  \right)
+  & = 0, \quad \forall w \in V_1, \\
+  \langle \phi, D^{n+1} - D^n \rangle
+  + \Delta t B(\phi; u^{n+1/2},D^{n+1/2}) & = 0, \quad \forall \phi\in V_2,
+\end{align}
+for some $\gamma>0$.  Here we have substituted $\phi\to \nabla\cdot w$
+into the continuity equation before multiplying by $\gamma$ and adding
+to the velocity equation. Since $\nabla\cdot w\in V_2$, any solution
+of this augmented formulation is also a solution of the original
+formulation.
+
+We now consider Newton's method applied to the augmented system.
+
+Writing $\beta=\Delta t/2$ and given iterative guesses for
+$(u^{n+1},D^{n+1})$, the Newton updates $(u',D')$ satisfy
+\begin{align}
+  \nonumber
+  \langle w, u' \rangle + \beta A'(w, u'; u^{n+1})
+  + \beta\langle w, f(u')^{\perp}\rangle
+  - \beta\langle \nabla\cdot w, gD'\rangle & \\
+  \nonumber
+  \qquad + \gamma\Big(
+  \langle \nabla\cdot w, D' \rangle
+  + \beta B_u(\nabla\cdot w, u'; u^{n+1},D^{n+1}) & \\
+  \nonumber
+  \qquad  + \beta B_D(\nabla\cdot w, D'; u^{n+1},D^{n+1})
+  \Big)
+  & = -R_u(w;u^{n+1},D^{n+1}) \\
+  & \qquad \qquad - \gamma R_D(\nabla\cdot w;
+  u^{n+1},D^{n+1}), \quad \forall w \in V_1, \\
+  \langle \phi, D' \rangle
+  + \beta B_u(\phi, u'; u^{n+1},D^{n+1})
+  + \beta B_D(\phi, D'; u^{n+1},D^{n+1})
+  & = -R_D(\phi; u^{n+1},D^{n+1}), \quad \forall \phi\in V_2.
+\end{align}
+Choosing $w \in \zeta_1$, where $\zeta_1=\{u\in V_1:\nabla\cdot u=0\}$,
+we have
+\begin{equation}
+  \langle w, u'_\zeta\rangle + \beta A'(w,u'_\zeta + u'_{\zeta^\perp}; u^{n+1})
+  + \beta\langle w, f(u'_\zeta + u'_{\zeta^\perp})^\perp\rangle = -R_u(w; u^{n+1},D^{n+1}),
+  \quad \forall w\in \zeta_1,
+\label{eq:uzeta}
+\end{equation}
+where $u'=u'_\zeta+u'_{\zeta^\perp}$ where $u'_\zeta\in \zeta_1$ and
+$u'_{\zeta^{\perp}}\in \zeta_1^\perp$, the orthogonal complement of
+$\zeta_1$ in $V_1$. If we choose instead $w\in \zeta_1^\perp$,
+divide by $\gamma$ and send $\gamma\to \infty$, we get
+\begin{align}
+  \nonumber
+   \beta B_u(\nabla\cdot w, u'_{\zeta^\perp}; u^{n+1},D^{n+1})  
+  + \beta B_u(\nabla\cdot w, u'_\zeta; u^{n+1},D^{n+1}) & = 
+  - \beta B_D(\nabla\cdot w, D'; u^{n+1},D^{n+1}) -\langle \nabla\cdot w, D' \rangle \\
+  & \qquad -R_D(\nabla\cdot w;u^{n+1},D^{n+1}), \qquad \forall w \in \zeta_1^\perp,
+\label{eq:uzetaperp}
+\end{align}
+where $u' = u'_{\zeta} + u'_{\zeta^\perp}$.  The solveability of this
+equation for $u'_{\zeta^\perp}$ given $u'_{\zeta}$ and $D'$ needs a
+bit of work, but $B_u$ is something related to $\nabla\cdot u$ so this
+is essentially a grad-div operator that is solveable in
+$\zeta^{\perp}_1$. Let's assume it for this note. Then, given $D'$, the
+system (\ref{eq:uzeta}-\ref{eq:uzetaperp}) can be solved for both
+components of $u'$, and we conclude that the dependence of $u'$ on
+$D'$ is asymptotically independent of $\gamma$ as $\gamma\to \infty$.
+
+For later, we'll define $\mathcal{L}_0:V_2\to V_1$ by splitting
+$\mathcal{L}_0D'=v_\zeta + v_{\zeta^\perp}$, according to
+\begin{align}
+    \langle w, v_\zeta\rangle + \beta A'(w,v_\zeta + v_{\zeta^\perp}; u^{n+1})
+  + \beta\langle w, f(v_\zeta + v_{\zeta^\perp})^\perp\rangle &= 0,
+  \quad \forall w\in \zeta_1, \\
+  \nonumber
+   \beta B_u(\nabla\cdot w, v_{\zeta^\perp}; u^{n+1},D^{n+1})  
+  + \beta B_u(\nabla\cdot w, v_\zeta; u^{n+1},D^{n+1}) & = 
+  - \beta B_D(\nabla\cdot w, D'; u^{n+1},D^{n+1}) -\langle \nabla\cdot w, D' \rangle \\
+  & \qquad \forall w \in \zeta_1^\perp.
+\end{align}
+Similarly, we'll define $r\in V_1$ with $r=r_\zeta + r_{\zeta^\perp}$ according to
+\begin{align}
+    \langle w, r_\zeta\rangle + \beta A'(w,r_\zeta + r_{\zeta^\perp}; u^{n+1})
+  + \beta\langle w, f(r_\zeta + r_{\zeta^\perp})^\perp\rangle &= -R_u(w; u^{n+1},D^{n+1}),
+  \quad \forall w\in \zeta_1, \\
+   \beta B_u(\nabla\cdot w, r_{\zeta^\perp}; u^{n+1},D^{n+1})  
+  + \beta B_u(\nabla\cdot w, r_\zeta; u^{n+1},D^{n+1}) & = 
+-R_D(\nabla\cdot w;u^{n+1},D^{n+1}), \qquad \forall w \in \zeta_1^\perp,
+\end{align}
+so that $u_0 = \mathcal{L}_0D' + r$.
+
+Now we use this to examine the asymptotics of the $\gamma\to \infty$
+limit of the Schur complement upon eliminating $u'$. To do this, we
+write the dependence of $u'$ on $D'$ as $u'(D') =u_0 + \gamma^{-1} u_1
++ \mathcal{O}(\gamma^{-2})$, which we just justified. At
+$\mathcal{O}(1)$, we have
+\begin{align}
+  \nonumber \beta B_u(\nabla\cdot w, u_0; u^{n+1},D^{n+1}) & = - \beta
+  B_D(\nabla\cdot w, D'; u^{n+1},D^{n+1}) \\ & \qquad -\langle
+  \nabla\cdot w, D' \rangle -R_D(\nabla\cdot w;u^{n+1},D^{n+1}), \quad
+  \forall w\in V_1.
+\end{align}
+
+Since for all $\phi\in V_2$ there exists $w\in V_1$ such that
+$\nabla\cdot w = \phi$, the $\phi$ equation becomes $0=0$ at
+$\mathcal{O}(1)$ (that's why we need to go one term further in the
+expansion).
+
+At the next order, we get
+\begin{align}
+  \nonumber
+  \beta B_u(\nabla\cdot w, u_1; u^{n+1},D^{n+1})
+  & = 
+  -\langle w, u_0 \rangle - \beta A'(w, u_0; u^{n+1})
+  - \beta\langle w, f(u_0)^{\perp}\rangle \\
+  & \qquad\qquad
+  + \beta\langle \nabla\cdot w, gD'\rangle
+  -R_u(w;u^{n+1},D^{n+1})
+  \quad \forall w \in V_1.
+\end{align}
+
+Defining $w_\phi$ as the unique function in $\zeta_1^{\perp}$ such
+that $\nabla\cdot w_\phi=\phi$, we get
+\begin{align}
+  \nonumber
+  \beta B_u(\phi, u_1; u^{n+1},D^{n+1})
+  & = 
+  -\langle w_{\phi}, u_0 \rangle - \beta A'(w_\phi, u_0; u^{n+1})
+  - \beta\langle w_\phi, f(u_0)^{\perp}\rangle \\
+  & \qquad\qquad
+  + \beta\langle \phi, gD'\rangle
+  -R_u(w_\phi;u^{n+1},D^{n+1})
+  \quad \forall \phi \in V_2.
+\end{align}
+Hence, to this order, the Schur complement equation becomes
+\begin{align}
+  \nonumber
+  \frac{1}{\gamma}\Big(-\langle w_{\phi}, \mathcal{L}_0D' \rangle 
+  - \beta A'(w_\phi, \mathcal{L}_0D'; u^{n+1}) \quad & \\
+  \nonumber
+\qquad  \qquad   - \beta\langle w_\phi, f(\mathcal{L}_0D')^{\perp}\rangle
+  + \beta\langle \phi, gD'\rangle\Big)
+  &= \frac{1}{\gamma}\Big(R_u(w_\phi;u^{n+1},D^{n+1})
+  -\langle w_{\phi}, r \rangle  \\
+  & \qquad\qquad -\beta A'(w_\phi, r; u^{n+1})
+  - \beta\langle w_\phi, fr^{\perp}\rangle\Big),
+  \quad \forall \phi \in V_2,
+\end{align}
+$\mathcal{L}_0D'$ keeps the same or reduces the number of derivatives.
+Further, the operator $\phi\to w_\phi$ is like a negative gradient.
+This means that the operator with the most derivatives is the
+mass operator (fourth term).
+
+Some results. Williamson 5. LU on top-left block.
+\begin{tabular}{|c|c|c|c|c|}
+  \hline
+  mesh & $\Delta t$ & $2\gamma/g/\Delta t$ & ksp Schur its & iterations \\
+  5 & 1 & $10^5$ & 3 & 7 \\
+  5 & 1 & $10^4$ & 3 & 4 \\
+  5 & 1 & $10^3$ & 3 & 14 \\
+  6 & 1 & $10^4$ & 3 & 4 \\
+  6 & 1 & $10^5$ & 3 & 7 \\
+  6 & 1 & $10^3$ & 3 & 15 \\
+  4 & 1 & $10^4$ & 3 & 4 \\
+  4 & 1 & $10^3$ & 3 & 14 \\
+  4 & 1 & $10^5$ & 3 & 7 \\
+  \hline
+\end{tabular}
+
+More results. Williamson 5. MG on top-left block. Star iterations with
+3 GMRES on levels.\\
+\begin{tabular}{|c|c|c|c|c|}
+  \hline
+  mesh & $\Delta t$ & $2\gamma/g/\Delta t$ & ksp Schur its & iterations \\
+  4 & 1 & $10^4$ & 3 & 4 \\
+  5 & 1 & $10^4$ & 3 & 4 \\
+  6 & 1 & $10^4$ & 3 & 5 \\
+  7 & 1 & $10^4$ & 3 & 6-7 \\
+  \hline
+  4 & 2 & $10^4$ & 3 & 4 \\
+  5 & 1 & $10^4$ & 3 & 4 \\
+  6 & 0.5 & $10^4$ & 3 & 5 \\
+  7 & 0.25 & $10^4$ & 3 & 6-7 \\
+  \hline
+\end{tabular}
+
+
+
+\section{Rotating compressible Euler equations}
+
+We can write the Newton iteration for the implicit midpoint rule for
+compatible FEM discretisation of the rotating compressible Euler equations
+in the form
+\begin{align}
+  B(w,(u',\Pi',\theta'); \bar{U}) & = -R_u[w], \quad \forall w\in V_2, \\
+  T(q,(u',\theta'); \bar{U}) & = -R_\theta[q], \quad \forall q\in V_\theta, \\
+  C(\phi,(u',\rho'); \bar{U}) & = -R_\rho[\phi], \quad \forall \phi \in V_3, \\
+  P(\mu,(\rho',\theta',\Pi'); \bar{U}) & = -R_\Pi[\mu], \quad
+  \forall \mu \in V_3,
+\end{align}
+where $\bar{U}=(\bar{u},\bar{\theta},\bar{\rho},\bar{\Pi})$.
+
+Now, to make the augmented formulation, we take a mapping $\tau:V_2\to
+V_\theta$ that extracts the vertical part $w_v$, and transforms it into the
+equivalent $V_\theta$ function (i.e. removes $J$ quantities and takes
+the scalar part). Then, we augment the $u$ equation with all three
+other equations, to get
+\begin{align}
+  \nonumber
+  B(w,(u',\Pi',\theta'); \bar{U})
+  +\gamma T(\tau w,(u',\theta'); \bar{U}) & \\
+  \nonumber
+  \qquad +\gamma C(\nabla \cdot w_v,(u',\rho'); \bar{U})
+  +\gamma P(\nabla\cdot w_v,(\rho',\theta',\Pi'); \bar{U})
+  & = -R_u[w]
+  -\gamma R_\theta[\tau w] & \\
+ & \qquad  -\gamma R_\rho[\nabla\cdot w_v]
+  -\gamma R_\Pi[\nabla\cdot w_v], \quad \forall w\in V_2, \\
+  T(q,(u',\theta'); \bar{U}) & = -R_\theta[q], \quad \forall q\in V_\theta, \\
+  C(\phi,(u',\rho'); \bar{U}) & = -R_\rho[\phi], \quad \forall \phi \in V_3, \\
+  P(\mu,(\rho',\theta',\Pi'); \bar{U}); \bar{U}) & = -R_\Pi[\mu], \quad
+  \forall \mu \in V_3.
+\end{align}
+Then we consider a Schur complement preconditioner eliminating
+$(u',\rho',\theta')$ to get a single equation for $\Pi'$, and look for
+an approximate Schur complement. To analyse the Schur complement (and
+suggest an approximation), we choose $w\in V_2^v$ (the vertical part
+of $V_2$, so that $w=w_v$), and send $\gamma \to \infty$, to get
+\begin{equation}
+T(\tau w,(u',\theta'); \bar{U})
++C(\nabla \cdot w_v,(u',\rho'); \bar{U})
++P(\nabla\cdot w_v,(\rho',\theta',\Pi'); \bar{U})
+ = 
+- R_\theta[\tau w] - R_\rho[\nabla\cdot w_v]
+- R_\Pi[\nabla\cdot w_v], \quad \forall w\in V_2^v.
+\end{equation}
+Choosing $w \in V_2^h$ (horizontal part) gives
+\begin{equation}
+  B(w, (u',\pi',\theta'); \bar{U}) = R_u[w], \quad \forall w\in
+  V_2^h.
+\end{equation}
+Similar to the rotating shallow water equations, we define
+$\mathcal{L}:V_2 \to V_1\times V_2 \times V_\theta$ with
+$\mathcal{L}:\Pi \mapsto (\mathcal{L}_u\Pi,\mathcal{L}_\rho\Pi,
+\mathcal{L}_\theta\Pi)$, according to
+\begin{align}
+  \nonumber
+T(\tau w,(\mathcal{L}_u\Pi,\mathcal{L}_\theta\Pi; \bar{U})
++C(\nabla \cdot w_v,(\mathcal{L}_u\Pi,\mathcal{L}_\rho\Pi); \bar{U}) & \\
+\qquad +P_1(\nabla\cdot w_v,(\mathcal{L}_\rho\Pi,\mathcal{L}_\theta\Pi); \bar{U})
+& =
+- P_2(\nabla\cdot w_v,\Pi'); \bar{U}), \quad \forall w\in V_2^v, \\ 
+B_1(w, (\mathcal{L}_u\Pi,\mathcal{L}_\theta\Pi); \bar{U}) & =
+-B_2(w, (u',\Pi'); \bar{U}), \quad \forall w\in
+  V_2^h,
+\end{align}
+and $(r_u,r_\rho,r_\theta)\in V_1\times V_2 \times V_\theta$ according to
+\begin{align}
+  \nonumber
+T(\tau w,(r_u,r_\theta; \bar{U})
++C(\nabla \cdot w_v,(r_u,\rho); \bar{U})
++P_1(\nabla\cdot w_v,(r_\rho,r_\theta); \bar{U})
+ & = 
+- R_\theta[\tau w] - R_\rho[\nabla\cdot w_v] \\
+& \quad - R_\Pi[\nabla\cdot w_v], \quad \forall w\in V_2^v, \\ 
+  B_1(w, (r_u,r_\theta); \bar{U}) & = R_u[w], \quad \forall w\in
+  V_2^h,
+\end{align}
+where we have split up $P=P_1+P_2$ and $B=B_1+B_2$ into the part
+containing $u'$, $\rho'$ and $\theta'$ and the part containing $\Pi'$.
+Then, at leading order in $\gamma$, we have $(u',\rho'\theta')=
+(\mathcal{L}_u\Pi+r_u,\mathcal{L}_\rho\Pi+r_\rho,\mathcal{L}_\theta\Pi+r_\theta)$.
+This equation seems solvable (we don't need to solve it in practise, only in
+theory) because the mass term in $T$ turns into a mass term for the
+vertical part of $u'$.
+
+Now we define $\phi_\gamma$ by finding $w\in V_1^v$ such that
+$\tau w=\gamma$, and $\phi_\gamma = w$. Then we can conclude that
+\begin{equation}
+T(\gamma,(r_u,r_\theta; \bar{U})
++C(\phi_\gamma,(r_u,\rho); \bar{U})
++P_1(\phi_\gamma,(r_\rho,r_\theta); \bar{U})
+  = 
+- R_\theta[\gamma] - R_\rho[\phi_\gamma]
+- R_\Pi[\phi_\gamma], \quad \forall \gamma\in V_\theta.
+\end{equation}
+Combining through the $\rho$ and $\Pi$ equations, we end up with
+$0=0$ at leading order in $\gamma$, so we need to go the next order.
+
+Writing $u'=u_0 + \gamma^{-1}u_1 + \mathcal{O}(\gamma^{-2})$, and
+similar for $\theta'$ and $\rho'$, at $\mathcal{O}(\gamma^{-1})$ we
+get
+\begin{align}
+  \nonumber
+  B(w,(u'_0,\Pi'_0,\theta'_0); \bar{U})
+  +T(\tau w,(u'_1,\theta'_1); \bar{U}) & \\
+  \nonumber
+  \qquad + C(\nabla \cdot w_v,(u'_1,\rho'_1); \bar{U})
+  + P(\nabla\cdot w_v,(\rho'_1,\theta'_1,\Pi'_1); \bar{U})
+  & = -R_u[w], \quad \forall w\in V_2, \\
+  T(q,(u'_1,\theta'_1); \bar{U}) & = 0, \quad \forall q\in V_\theta, \\
+  C(\phi,(u'_1,\rho'_1); \bar{U}) & = 0, \quad \forall \phi \in V_3, \\
+  P(\mu,(\rho'_1,\theta'_1,\Pi'_1); \bar{U}); \bar{U}) & = 0, \quad
+  \forall \mu \in V_3.
+\end{align}
+Going through the elimination steps again, we get
+\begin{equation}
+  -B(w_\phi, (\mathcal{L}_u\Pi',\mathcal{L}_\theta\Pi',\Pi'); \bar{U})
+  = R_u[w_\phi],
+  \quad \forall \phi \in V_3.
+\end{equation}
+
+\end{document}
