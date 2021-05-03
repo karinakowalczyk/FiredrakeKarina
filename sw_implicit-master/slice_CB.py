@@ -4,8 +4,8 @@ import firedrake as fd
 
 dT = fd.Constant(0)
 
-nlayers = 80  # horizontal layers
-columns = 150  # number of columns
+nlayers = 20  # horizontal layers
+columns = 20  # number of columns
 L = 3.0e5
 m = fd.PeriodicIntervalMesh(columns, L)
 
@@ -17,11 +17,18 @@ U = fd.Constant(20.)
 # build volume mesh
 H = 1.0e4  # Height position of the model top
 mesh = fd.ExtrudedMesh(m, layers=nlayers, layer_height=H/nlayers)
+
+Vc = mesh.coordinates.function_space()
+x, y = fd.SpatialCoordinate(mesh)
+#f_mesh = Function(Vc).interpolate(as_vector([x, y + ( 0.25 * x**4 -x**3 + x**2) * (1-y) ] ) )
+f_mesh = fd.Function(Vc).interpolate(fd.as_vector([x,y - (1/H)*fd.exp(-x**2/2)*((y-0.5*H)**2 -0.25* H**2 )] ) )
+mesh.coordinates.assign(f_mesh)
+
 H = fd.Constant(H)
 
 family = "CG"
-horizontal_degree = 1
-vertical_degree = 1
+horizontal_degree = 0
+vertical_degree = 0
 S1 = fd.FiniteElement(family, fd.interval, horizontal_degree+1)
 S2 = fd.FiniteElement("DG", fd.interval, horizontal_degree)
 
@@ -113,8 +120,8 @@ sparameters = {
     "ksp_rtol": 1e-8,
     "pc_type": "fieldsplit",
     "pc_fieldsplit_type": "schur",
-    "pc_fieldsplit_0_fields": "0,1",
-    "pc_fieldsplit_1_fields": "2",
+    "pc_fieldsplit_0_fields": "0,2",
+    "pc_fieldsplit_1_fields": "1",
     "pc_fieldsplit_schur_fact_type": "full",
     "pc_fieldsplit_off_diag_use_amat": True,
 }
@@ -170,7 +177,7 @@ sparameters["fieldsplit_0"] = topleft_LU
 nsolver = fd.NonlinearVariationalSolver(nprob,
                                         solver_parameters=sparameters)
 
-name = "gw_imp"
+name = "Results/Old/gw_imp"
 file_gw = fd.File(name+'.pvd')
 un, Pin, bn = Un.split()
 file_gw.write(un, Pin, bn)
