@@ -1,5 +1,5 @@
 from petsc4py import PETSc
-PETSc.Sys.popErrorHandler()
+#PETSc.Sys.popErrorHandler()
 import firedrake as fd
 
 dT = fd.Constant(0)
@@ -164,7 +164,9 @@ topleft_LU = {
 
 topleft_LS = {'pc_type': 'python',
               'pc_python_type': 'firedrake.ASMLinesmoothPC',
-              'pc_linesmooth_codims': '1'}
+              'pc_linesmooth_codims': '1',
+              'pc_linesmooth_star': '1'
+               }
 
 topleft_MG = {
     "ksp_type": "preonly",
@@ -189,7 +191,7 @@ topleft_MG = {
     "mg_levels_patch_sub_ksp_type": "preonly",
     "mg_levels_patch_sub_pc_type": "lu",
 }
-sparameters["fieldsplit_0"] = topleft_LU
+sparameters["fieldsplit_0"] = topleft_LS
 
 nsolver = fd.NonlinearVariationalSolver(nprob,
                                         solver_parameters=sparameters)
