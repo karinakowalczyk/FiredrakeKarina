@@ -4,8 +4,8 @@ import firedrake as fd
 
 dT = fd.Constant(0)
 
-nlayers = 20  # horizontal layers
-columns = 20  # number of columns
+nlayers = 50  # horizontal layers
+columns = 100  # number of columns
 L = 3.0e5
 m = fd.PeriodicIntervalMesh(columns, L)
 
@@ -163,9 +163,12 @@ topleft_LU = {
 }
 
 topleft_LS = {'pc_type': 'python',
-              'pc_python_type': 'firedrake.ASMLinesmoothPC',
-              'pc_linesmooth_codims': '1',
-              'pc_linesmooth_star': '1'
+              "pc_python_type": "firedrake.AssembledPC",
+              'assempled_pc_type': 'python',
+              'assembled_pc_python_type': 'firedrake.ASMStarPC',
+              'assembled_pc_star_dims': '0',
+              'assembled_pc_star_sub_sub_pc_factor_mat_solver_type' : 'mumps',
+              #'assembled_pc_linesmooth_star': '1'
                }
 
 topleft_MG = {
@@ -191,7 +194,7 @@ topleft_MG = {
     "mg_levels_patch_sub_ksp_type": "preonly",
     "mg_levels_patch_sub_pc_type": "lu",
 }
-sparameters["fieldsplit_0"] = topleft_LS
+sparameters["fieldsplit_0"] = topleft_LU
 
 nsolver = fd.NonlinearVariationalSolver(nprob,
                                         solver_parameters=sparameters)

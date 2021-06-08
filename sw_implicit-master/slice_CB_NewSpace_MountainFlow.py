@@ -71,7 +71,8 @@ xc = L/2
 a = fd.Constant(5000)
 
 un, Pin, bn, lamdar = Un.split()
-bn.interpolate(fd.sin(fd.pi*z/H)/(1+(x-xc)**2/a**2))
+#bn.interpolate(fd.sin(fd.pi*z/H)/(1+(x-xc)**2/a**2))
+#bn.interpolate(fd.Constant(0.0001))
 
 #The timestepping solver
 un, Pin, bn, lamdan = fd.split(Un)
@@ -113,16 +114,25 @@ def u_eqn(w, gammar):
                          - unn('-')*unph('-'))*(fd.dS_v + fd.dS_h)
 
         + dT*(fd.jump(unp1, n=n) * gammar('+') * (fd.dS_h) + fd.jump(w, n=n) * lamdanp1('+') * (fd.dS_h))
-        + dT*(fd.inner(unp1, n) * gammar * fd.ds_tb + fd.inner(w, n) * lamdanp1 * (fd.ds_tb))
+        + dT*(fd.inner(Ubar +unp1, n) * gammar * fd.ds_tb + fd.inner(w, n) * lamdanp1 * (fd.ds_tb))
 
         -dT*fd.div(w)*Pinph*fd.dx - dT*fd.inner(w, k)*bnph*fd.dx
         )
+def incompressibility(q):
+    return (
+
+            + q * fd.div(unp1) * fd.dx
+    )
 
 w, phi, q, gammar = fd.TestFunctions(W)
 gamma = fd.Constant(1000.0)
 eqn = u_eqn(w, gammar) + theta_eqn(q) + pi_eqn(phi) + gamma*pi_eqn(fd.div(w))
 
 nprob = fd.NonlinearVariationalProblem(eqn, Unp1)
+
+v_basis = fd.VectorSpaceBasis(constant=True)
+nullspace = fd.MixedVectorSpaceBasis(W, [v_basis, W.sub(1)])
+
 luparams = {'snes_monitor':None,
     'mat_type':'aij',
     'ksp_type':'preonly',
@@ -164,8 +174,9 @@ topleft_LU = {
 }
 
 topleft_LS = {'pc_type': 'python',
-              'pc_python_type': 'firedrake.ASMLinesmoothPC',
-              'pc_linesmooth_codims': '1'}
+              'assembled_pc_python_type': 'firedrake.ASMStarPC',
+              'assembled_pc_star_dims': '0',
+              'assembled_pc_star_sub_sub_pc_factor_mat_solver_type' : 'mumps',}
 
 topleft_MG = {
     "ksp_type": "preonly",
@@ -206,6 +217,8 @@ dumpt = 600.
 tdump = 0.
 dT.assign(dt)
 tmax = 3600.
+
+
 print('tmax', tmax, 'dt', dt)
 t = 0.
 while t < tmax - 0.5*dt:
