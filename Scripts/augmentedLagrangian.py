@@ -104,14 +104,22 @@ topleft_LU = {
     "assembled_pc_factor_mat_solver_type": "mumps"
 }
 
-
 topleft_LS = {'pc_type': 'python',
               "pc_python_type": "firedrake.AssembledPC",
-              "assembled_ksp_type": "preonly",
-              "assembled_pc_type": "python",
+              'assempled_pc_type': 'python',
               'assembled_pc_python_type': 'firedrake.ASMLinesmoothPC',
-              'assembled_pc_linesmooth_codims': '1'
-              }
+              'assembled_pc_linesmooth_codims': '1',
+              'assembled_pc_linesmooth_star': '1'
+               }
+
+#topleft_LS = {'pc_type': 'python',
+ #             "pc_python_type": "firedrake.AssembledPC",
+  #            "assembled_ksp_type": "preonly",
+   #           "assembled_pc_type": "python",
+    #          'assembled_pc_python_type': 'firedrake.ASMLinesmoothPC',
+     #         'assembled_pc_linesmooth_codims': '0, 1',
+      #        'assembled_pc_linesmooth_star': '1',
+       #       }
 
 topleft_MG = {
     "ksp_type": "preonly",
