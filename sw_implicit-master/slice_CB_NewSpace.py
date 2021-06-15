@@ -4,15 +4,15 @@ import firedrake as fd
 
 dT = fd.Constant(0)
 
-nlayers = 50  # horizontal layers
-columns = 100  # number of columns
+nlayers = 30  # horizontal layers
+columns = 50  # number of columns
 L = 3.0e5
 m = fd.PeriodicIntervalMesh(columns, L)
 
 cs = fd.Constant(100.)
 f = fd.Constant(1.0)
 N = fd.Constant(1.0e-2)
-U = fd.Constant(20.)
+U = fd.Constant(0.0)
 
 # build volume mesh
 H = 1.0e4  # Height position of the model top
@@ -131,7 +131,7 @@ luparams = {'snes_monitor':None,
 sparameters = {
     "mat_type":"matfree",
     'snes_monitor': None,
-    "ksp_type": "fgmres",
+    "ksp_type": "preonly",
     "ksp_gmres_modifiedgramschmidt": None,
     'ksp_monitor': None,
     "ksp_rtol": 1e-8,
@@ -194,7 +194,7 @@ topleft_MG = {
     "mg_levels_patch_sub_ksp_type": "preonly",
     "mg_levels_patch_sub_pc_type": "lu",
 }
-sparameters["fieldsplit_0"] = topleft_LU
+sparameters["fieldsplit_0"] = topleft_LS
 
 nsolver = fd.NonlinearVariationalSolver(nprob,
                                         solver_parameters=sparameters)
