@@ -4,15 +4,15 @@ import firedrake as fd
 
 dT = fd.Constant(0)
 
-nlayers = 30  # horizontal layers
-columns = 50  # number of columns
+nlayers = 20 # horizontal layers
+columns = 20  # number of columns
 L = 3.0e5
 m = fd.PeriodicIntervalMesh(columns, L)
 
 cs = fd.Constant(100.)
 f = fd.Constant(1.0)
 N = fd.Constant(1.0e-2)
-U = fd.Constant(0.0)
+U = fd.Constant(0)
 
 # build volume mesh
 H = 1.0e4  # Height position of the model top
@@ -26,7 +26,6 @@ f_mesh = fd.Function(Vc).interpolate(fd.as_vector([x,y - (1/H)*fd.exp(-x**2/2)*(
 mesh.coordinates.assign(f_mesh)
 
 H = fd.Constant(H)
-
 
 family = "CG"
 horizontal_degree = 0
@@ -118,7 +117,7 @@ def u_eqn(w, gammar):
         )
 
 w, phi, q, gammar = fd.TestFunctions(W)
-gamma = fd.Constant(1000.0)
+gamma = fd.Constant(10000.0)
 eqn = u_eqn(w, gammar) + theta_eqn(q) + pi_eqn(phi) + gamma*pi_eqn(fd.div(w))
 
 nprob = fd.NonlinearVariationalProblem(eqn, Unp1)
@@ -131,8 +130,10 @@ luparams = {'snes_monitor':None,
 sparameters = {
     "mat_type":"matfree",
     'snes_monitor': None,
-    "ksp_type": "preonly",
+    "ksp_type": "fgmres",
+    #"ksp_view": None,
     "ksp_gmres_modifiedgramschmidt": None,
+    'ksp_converged_reason': None,
     'ksp_monitor': None,
     "ksp_rtol": 1e-8,
     "pc_type": "fieldsplit",
@@ -162,38 +163,18 @@ topleft_LU = {
     "assembled_pc_factor_mat_solver_type": "mumps"
 }
 
-topleft_LS = {'pc_type': 'python',
-              "pc_python_type": "firedrake.AssembledPC",
-              'assempled_pc_type': 'python',
-              'assembled_pc_python_type': 'firedrake.ASMStarPC',
-              'assembled_pc_star_dims': '0',
-              'assembled_pc_star_sub_sub_pc_factor_mat_solver_type' : 'mumps',
-              #'assembled_pc_linesmooth_star': '1'
-               }
-
-topleft_MG = {
-    "ksp_type": "preonly",
-    "ksp_max_it": 3,
-    "pc_type": "mg",
-    "mg_coarse_ksp_type": "preonly",
-    "mg_coarse_pc_type": "python",
-    "mg_coarse_pc_python_type": "firedrake.AssembledPC",
-    "mg_coarse_assembled_pc_type": "lu",
-    "mg_coarse_assembled_pc_factor_mat_solver_type": "mumps",
-    "mg_levels_ksp_type": "gmres",
-    "mg_levels_ksp_max_it": 3,
-    "mg_levels_pc_type": "python",
-    "mg_levels_pc_python_type": "firedrake.PatchPC",
-    "mg_levels_patch_pc_patch_save_operators": True,
-    "mg_levels_patch_pc_patch_partition_of_unity": False,
-    "mg_levels_patch_pc_patch_sub_mat_type": "seqaij",
-    "mg_levels_patch_pc_patch_construct_type": "star",
-    "mg_levels_patch_pc_patch_multiplicative": False,
-    "mg_levels_patch_pc_patch_symmetrise_sweep": False,
-    "mg_levels_patch_pc_patch_construct_dim": 0,
-    "mg_levels_patch_sub_ksp_type": "preonly",
-    "mg_levels_patch_sub_pc_type": "lu",
+topleft_LS = {
+    'ksp_type': 'preonly',
+    'pc_type': 'python',
+    "pc_python_type": "firedrake.AssembledPC",
+    'assembled_pc_type': 'python',
+    'assembled_pc_python_type': 'firedrake.ASMStarPC',
+    "assembled_pc_star_sub_pc_type": "lu",
+    'assembled_pc_star_dims': '0',
+    'assembled_pc_star_sub_sub_pc_factor_mat_solver_type' : 'mumps'
+    #'assembled_pc_linesmooth_star': '1'
 }
+
 sparameters["fieldsplit_0"] = topleft_LS
 
 nsolver = fd.NonlinearVariationalSolver(nprob,

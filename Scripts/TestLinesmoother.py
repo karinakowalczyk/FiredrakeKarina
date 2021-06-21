@@ -55,7 +55,8 @@ def test_HDIV_linesmoother_Star(mesh, S1family, L, H):
         "assembled_pc_type": "python",
         'assembled_pc_python_type': 'firedrake.ASMStarPC',
         'assembled_pc_star_dims': '0',
-        #'assembled_pc_linesmooth_star': '1',
+        "assembled_pc_star_sub_pc_type": "lu",
+        "assembled_pc_star_sub_sub_pc_factor_mat_solver_type": "mumps"
     }
 
     LU = {
@@ -158,6 +159,7 @@ def test_BrokenVert_linesmoother_Star(mesh, S1family, L, H):
         "mat_type": "matfree",
         'snes_monitor': None,
         "ksp_type": "gmres",
+        "ksp_view": None,
         "ksp_monitor": None,
         'pc_type': 'python',
         "pc_python_type": "firedrake.AssembledPC",
@@ -165,8 +167,8 @@ def test_BrokenVert_linesmoother_Star(mesh, S1family, L, H):
         "assembled_pc_type": "python",
         'assembled_pc_python_type': 'firedrake.ASMStarPC',
         'assembled_pc_star_dims': '0',
+        "assembled_pc_star_sub_pc_type": "lu",
         'assembled_pc_star_sub_sub_pc_factor_mat_solver_type' : 'mumps',
-        #'assembled_pc_linesmooth_star': '0',
     }
 
     LU = {
