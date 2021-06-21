@@ -86,11 +86,11 @@ def test_HDIV_linesmoother_Star(mesh, S1family, L, H):
     file1 = File("../Results/Linesmoother/HdivSpace_LS.pvd")
     file1.write(uh)
 
-    LU_solver = LinearVariationalSolver(problem, solver_parameters=LU)
-    LU_solver.solve()
+    #LU_solver = LinearVariationalSolver(problem, solver_parameters=LU)
+    #LU_solver.solve()
 
-    file2 = File("../Results/Linesmoother/HdivSpace_LU.pvd")
-    file2.write(uh)
+    #file2 = File("../Results/Linesmoother/HdivSpace_LU.pvd")
+    #file2.write(uh)
     #ctx = solver.snes.ksp.pc.getPythonContext()
     #nits.append(ctx.trace_ksp.getIterationNumber())
     #print(ctx.trace_ksp.getIterationNumber())
@@ -168,7 +168,7 @@ def test_BrokenVert_linesmoother_Star(mesh, S1family, L, H):
         'assembled_pc_python_type': 'firedrake.ASMStarPC',
         'assembled_pc_star_dims': '0',
         "assembled_pc_star_sub_pc_type": "lu",
-        'assembled_pc_star_sub_sub_pc_factor_mat_solver_type' : 'mumps',
+        'assembled_pc_star_sub_pc_factor_mat_solver_type' : 'mumps',
     }
 
     LU = {

@@ -171,7 +171,7 @@ topleft_LS = {
     'assembled_pc_python_type': 'firedrake.ASMStarPC',
     "assembled_pc_star_sub_pc_type": "lu",
     'assembled_pc_star_dims': '0',
-    'assembled_pc_star_sub_sub_pc_factor_mat_solver_type' : 'mumps'
+    'assembled_pc_star_sub_pc_factor_mat_solver_type' : 'mumps'
     #'assembled_pc_linesmooth_star': '1'
 }
 
