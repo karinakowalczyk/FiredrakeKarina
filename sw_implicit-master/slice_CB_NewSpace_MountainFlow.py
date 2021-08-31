@@ -5,14 +5,14 @@ import firedrake as fd
 dT = fd.Constant(0)
 
 nlayers = 50  # horizontal layers
-columns = 100  # number of columns
+columns = 110  # number of columns
 L = 3.0e5
 m = fd.PeriodicIntervalMesh(columns, L)
 
 cs = fd.Constant(300.)
 f = fd.Constant(1.0)
 N = fd.Constant(1.0e-2)
-U = fd.Constant(10.)
+U = fd.Constant(20.)
 
 # build volume mesh
 H = 1.0e4  # Height position of the model top
@@ -21,7 +21,7 @@ mesh = fd.ExtrudedMesh(m, layers=nlayers, layer_height=H/nlayers)
 Vc = mesh.coordinates.function_space()
 x, y = fd.SpatialCoordinate(mesh)
 profile = ((1000)**2)/((x-L/2)**2 + (1000)**2)
-f_mesh = fd.Function(Vc).interpolate(fd.as_vector([x, y + ( profile* (1-y/H)) ] ) )
+f_mesh = fd.Function(Vc).interpolate(fd.as_vector([x, y + (profile * (1-y/H)) ] ) )
 #f_mesh = fd.Function(Vc).interpolate(fd.as_vector([x, 2*y] ))
 #f_mesh = fd.Function(Vc).interpolate(fd.as_vector([x,y - (1/H)*fd.exp(-x**2/2)*((y-0.5*H)**2 -0.25* H**2 )] ) )
 mesh.coordinates.assign(f_mesh)
@@ -73,15 +73,18 @@ a = fd.Constant(5000)
 un, Pin, bn, lamdar = Un.split()
 #bn.interpolate(fd.sin(fd.pi*z/H)/(1+(x-xc)**2/a**2))
 #bn.interpolate(fd.Constant(0.0001))
+un.project(fd.as_vector([U,0]))
 
 #The timestepping solver
 un, Pin, bn, lamdan = fd.split(Un)
 unp1, Pinp1, bnp1, lamdanp1 = fd.split(Unp1)
+
 unph = 0.5*(un + unp1)
 bnph = 0.5*(bn + bnp1)
 lamdanph = 0.5*(lamdan + lamdanp1)
 Pinph = 0.5*(Pin + Pinp1)
-Ubar = fd.as_vector([U, 0])
+#Ubar = fd.as_vector([U, 0])
+Ubar = unph
 n = fd.FacetNormal(mesh)
 unn = 0.5*(fd.dot(Ubar, n) + abs(fd.dot(Ubar, n)))
 
@@ -118,11 +121,7 @@ def u_eqn(w, gammar):
 
         -dT*fd.div(w)*Pinph*fd.dx - dT*fd.inner(w, k)*bnph*fd.dx
         )
-def incompressibility(q):
-    return (
 
-            + q * fd.div(unp1) * fd.dx
-    )
 
 w, phi, q, gammar = fd.TestFunctions(W)
 gamma = fd.Constant(1000.0)
@@ -173,16 +172,17 @@ topleft_LU = {
     "assembled_pc_factor_mat_solver_type": "mumps"
 }
 
-topleft_LS = {'pc_type': 'python',
-              "pc_python_type": "firedrake.AssembledPC",
-              'assempled_pc_type': 'python',
-              #'assembled_pc_python_type': 'firedrake.ASMLinesmoothPC',
-              #'assembled_pc_linesmooth_codims': '1',
-              #}
-              #'assembled_pc_linesmoooth_sub_sub_pc_factor_mat_solver_type' : 'mumps',}
-              'assembled_pc_python_type': 'firedrake.ASMStarPC',
-              'assembled_pc_star_dims': '0',
-              'assembled_pc_star_sub_sub_pc_factor_mat_solver_type' : 'mumps'}
+topleft_LS = {
+    'ksp_type': 'preonly',
+    'pc_type': 'python',
+    "pc_python_type": "firedrake.AssembledPC",
+    'assembled_pc_type': 'python',
+    'assembled_pc_python_type': 'firedrake.ASMStarPC',
+    "assembled_pc_star_sub_pc_type": "lu",
+    'assembled_pc_star_dims': '0',
+    'assembled_pc_star_sub_pc_factor_mat_solver_type' : 'mumps'
+    #'assembled_pc_linesmooth_star': '1'
+}
 
 topleft_MG = {
     "ksp_type": "preonly",

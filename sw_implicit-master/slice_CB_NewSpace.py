@@ -4,15 +4,15 @@ import firedrake as fd
 
 dT = fd.Constant(0)
 
-nlayers = 20 # horizontal layers
-columns = 20  # number of columns
+nlayers = 40 # horizontal layers
+columns = 80  # number of columns
 L = 3.0e5
 m = fd.PeriodicIntervalMesh(columns, L)
 
 cs = fd.Constant(100.)
 f = fd.Constant(1.0)
 N = fd.Constant(1.0e-2)
-U = fd.Constant(0)
+U = fd.Constant(20.0)
 
 # build volume mesh
 H = 1.0e4  # Height position of the model top
@@ -78,7 +78,8 @@ unph = 0.5*(un + unp1)
 bnph = 0.5*(bn + bnp1)
 lamdanph = 0.5*(lamdan + lamdanp1)
 Pinph = 0.5*(Pin + Pinp1)
-Ubar = fd.as_vector([U, 0])
+#Ubar = fd.as_vector([U, 0])   #linear case
+Ubar = unph
 n = fd.FacetNormal(mesh)
 unn = 0.5*(fd.dot(Ubar, n) + abs(fd.dot(Ubar, n)))
 

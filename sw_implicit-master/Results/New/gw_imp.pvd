@@ -2,5 +2,9 @@
 <VTKFile type="Collection" version="0.1" byte_order="LittleEndian">
 <Collection>
 <DataSet timestep="0" file="gw_imp_0.vtu" />
+<DataSet timestep="1" file="gw_imp_1.vtu" />
+<DataSet timestep="2" file="gw_imp_2.vtu" />
+<DataSet timestep="3" file="gw_imp_3.vtu" />
+<DataSet timestep="4" file="gw_imp_4.vtu" />
 </Collection>
 </VTKFile>
