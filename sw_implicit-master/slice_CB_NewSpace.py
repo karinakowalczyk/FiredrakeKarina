@@ -5,7 +5,7 @@ import firedrake as fd
 dT = fd.Constant(0)
 
 nlayers = 40 # horizontal layers
-columns = 80  # number of columns
+columns = 40  # number of columns
 L = 3.0e5
 m = fd.PeriodicIntervalMesh(columns, L)
 

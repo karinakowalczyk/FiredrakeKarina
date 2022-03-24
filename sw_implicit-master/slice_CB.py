@@ -83,12 +83,12 @@ def theta_eqn(q):
 
 def pi_eqn(q):
     return (
+
         q*(Pinp1 - Pin)*fd.dx -
         dT*fd.inner(fd.grad(q), Ubar*Pinph)*fd.dx
         + dT*fd.jump(q)*(unn('+')*Pinph('+') - unn('-')*Pinph('-'))*(fd.dS_v + fd.dS_h)
         + cs**2*dT*q*fd.div(unph)*fd.dx
     )
-
 def u_eqn(w):
     return (
         fd.inner(w, unp1 - un)*fd.dx

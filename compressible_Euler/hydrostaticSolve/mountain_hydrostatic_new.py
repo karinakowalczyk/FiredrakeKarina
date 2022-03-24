@@ -2,8 +2,8 @@ from firedrake import *
 import sys
 
 '''
-    version od "mountain_hydrostatic in gusto for new velocity space
-    without making use if gusto
+    version of "mountain_hydrostatic in gusto for new velocity space
+    without making use of gusto
 '''
 #set physical parameters
 
@@ -159,8 +159,6 @@ def compressible_hydrostatic_balance(parameters, theta0, rho0, pi0=None,
 
         + gammar * lambdar * bmeasure
     )
-
-
 
     arhs = -cp*inner(dv, n)*theta*pi_boundary*bmeasure
 
@@ -377,12 +375,38 @@ def remove_initial_w(u, Vv):
     uin = Function(u.function_space()).assign(u - ustar)
     u.assign(uin)
 
-remove_initial_w(u0, Vv)
+#remove_initial_w(u0, Vv)
+zvec = as_vector([0,1])
+n = FacetNormal(self.state.mesh)
+Upwind = 0.5*(sign(dot(self.ubar, n))+1)
+ubar = 0.5 (un+unp1)
+uadv_eq(w, ubar) = ( -inner(perp(grad(inner(w, perp(ubar)))), q)*dx
+                     - inner(jump(  inner(w, perp(ubar)), n), perp_u_upwind(q))*dS
+                   )
+#add boundary surface terms/BC
+ueqn(w, ubar) = (uadv_eq(w,ubar) - div(w*theta)* Pi*dx \
+                + jump(theta*w, n)*lambdar*dS_h # add boundary terms
+                + jump(theta*w, n)*Pinph*dS_v
+                + gammar*jump(u,n)*dS_h # add boundary terms
+                +g* inner(w,zvec)*dx
+                 )
 
-u_eqn(v)
+#check signs everywhere
+unn = 0.5*(dot(self.ubar, n) + abs(dot(self.ubar, n)))
+#q=rho
+rho_eqn(phi) = (-inner(grad(self.test), outer(q, self.ubar))*dx
+                + dot(jump(self.test), (un('+')*q('+')
+                                       - un('-')*q('-')))*self.dS)
 
+#q=theta
+theta_eqn(xi) = (
 
-
-ueqn = VectorInvariant(state, Vu)
-rhoeqn = AdvectionEquation(state, Vr, equation_form="continuity")
+inner(outer(self.test, self.ubar), grad(q))*dx
++= dot(jump(self.test), (un('+')*q('+')
+                                       - un('-')*q('-')))*self.dS#-= (inner(self.test('+'),
+                            dot(self.ubar('+'), n('+'))*q('+'))
+                      + inner(self.test('-'),
+                              dot(self.ubar('-'), n('-'))*q('-')))*self.dS
+)
+#rhoeqn = AdvectionEquation(state, Vr, equation_form="continuity")
 
