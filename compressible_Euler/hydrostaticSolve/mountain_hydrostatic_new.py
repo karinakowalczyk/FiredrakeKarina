@@ -254,7 +254,7 @@ def compressible_hydrostatic_balance(parameters, theta0, rho0, pi0=None,
 
 parameters = Parameters()
 
-dt = 5.0
+dT = Constant(0)
 
 nlayers = 100
 columns = 200
@@ -278,23 +278,19 @@ xexpr = as_vector([x, z + ((H-z)/H)*zs])
 new_coords = Function(Vc).interpolate(xexpr)
 mesh = Mesh(new_coords)
 
-# sponge function
-W_DG = FunctionSpace(mesh, "DG", 2)
-x, z = SpatialCoordinate(mesh)
-zc = H-20000.
-mubar = 0.3/dt
-mu_top = conditional(z <= zc, 0.0, mubar*sin((pi/2.)*(z-zc)/(H-zc))**2)
-mu = Function(W_DG).interpolate(mu_top)
+
 
 g = parameters.g
 c_p = parameters.cp
 
 Vv, Vp, Vt, Vtr = build_spaces(mesh, vertical_degree=1, horizontal_degree=1)
+W = Vv*Vp*Vt*Vtr
 # Hydrostatic case: Isothermal with T = 250
 Tsurf = 250.
 N = g/sqrt(c_p*Tsurf)
 
 # N^2 = (g/theta)dtheta/dz => dtheta/dz = theta N^2g => theta=theta_0exp(N^2gz)
+x,z = SpatialCoordinate(mesh)
 thetab = Tsurf*exp(N**2*z/g)
 theta_b = Function(Vt).interpolate(thetab)
 
@@ -363,8 +359,9 @@ compressible_hydrostatic_balance(parameters, theta_b, rho_b, Pi,
                                      params=piparamsSCPC)
 
 
+#initialise functions
 theta0 = Function(Vt).interpolate(theta_b)
-rho0 = Function(Vp).interpolate(rho_b)
+rho0 = Function(Vp).interpolate(rho_b) # where rho_b solves the hzdrostatic balance eq.
 u0 = Function(Vv).project(as_vector([20.0, 0.0]))
 
 def remove_initial_w(u, Vv):
@@ -375,38 +372,172 @@ def remove_initial_w(u, Vv):
     uin = Function(u.function_space()).assign(u - ustar)
     u.assign(uin)
 
-#remove_initial_w(u0, Vv)
+remove_initial_w(u0, Vv)
 zvec = as_vector([0,1])
-n = FacetNormal(self.state.mesh)
-Upwind = 0.5*(sign(dot(self.ubar, n))+1)
-ubar = 0.5 (un+unp1)
-uadv_eq(w, ubar) = ( -inner(perp(grad(inner(w, perp(ubar)))), q)*dx
-                     - inner(jump(  inner(w, perp(ubar)), n), perp_u_upwind(q))*dS
-                   )
+n = FacetNormal(mesh)
+
+########## define ttrial functions##################
+
+Un =Function(W)
+Unp1 = Function(W)
+
+x, z = SpatialCoordinate(mesh)
+
+un, rhon, thetan, lamdar = Un.split()
+
+un.assign(u0)
+rhon.assign(rho0)
+thetan.assign(theta0)
+
+#bn.interpolate(fd.sin(fd.pi*z/H)/(1+(x-xc)**2/a**2))
+#bn.interpolate(fd.Constant(0.0001))
+
+
+#The timestepping solver
+un, rhon, thetan, lamdan = split(Un)
+unp1, rhonp1, thetanp1, lamdanp1 = split(Unp1)
+
+unph = 0.5*(un + unp1)
+thetanph = 0.5*(thetan + thetanp1)
+lamdanph = 0.5*(lamdan + lamdanp1)
+rhonph = 0.5*(rhon + rhonp1)
+#Ubar = fd.as_vector([U, 0])-
+ubar = unph
+n = FacetNormal(mesh)
+unn = 0.5*(dot(ubar, n) + abs(dot(ubar, n)))
+
+Pin = thermodynamics_pi(parameters, rhon, thetan)
+Pinp1 = thermodynamics_pi(parameters, rhonp1, thetanp1)
+Pinph = 0.5*(Pin + Pinp1)
+################################################################
+
+Upwind = 0.5*(sign(dot(ubar, n))+1)
+
+perp_u_upwind = lambda q: Upwind('+')*perp(q('+')) + Upwind('-')*perp(q('-'))
+
+
+def uadv_eq(w):
+    return( -inner(perp(grad(inner(w, perp(ubar)))), ubar)*dx
+                     - inner(jump(  inner(w, perp(ubar)), n), perp_u_upwind(ubar))*dS
+             )
 #add boundary surface terms/BC
-ueqn(w, ubar) = (uadv_eq(w,ubar) - div(w*theta)* Pi*dx \
-                + jump(theta*w, n)*lambdar*dS_h # add boundary terms
-                + jump(theta*w, n)*Pinph*dS_v
-                + gammar*jump(u,n)*dS_h # add boundary terms
-                +g* inner(w,zvec)*dx
+def u_eqn(w, gammar):
+    return ( inner(w, unp1 - un)*dx + dT* (uadv_eq(w) - div(w*thetanph)* Pinph*dx
+                + jump(thetanph*w, n)*lamdanp1*dS_h # add boundary terms
+                + inner(thetanph*w, n)*lamdanp1*(ds_t + ds_b) # add boundary terms
+                + jump(thetanph*w, n)*Pinph*dS_v
+                + gammar*jump(unph,n)*dS_h # add boundary terms
+                + gammar*inner(unph,n)*(ds_t + ds_b)
+                + g * inner(w,zvec)*dx)
                  )
 
 #check signs everywhere
-unn = 0.5*(dot(self.ubar, n) + abs(dot(self.ubar, n)))
+unn = 0.5*(dot(ubar, n) + abs(dot(ubar, n)))
 #q=rho
-rho_eqn(phi) = (-inner(grad(self.test), outer(q, self.ubar))*dx
-                + dot(jump(self.test), (un('+')*q('+')
-                                       - un('-')*q('-')))*self.dS)
+def rho_eqn(phi):
+    return ( phi*(rhonp1 - rhon)*dx - dT * (inner(grad(phi), outer(rhonph, ubar))*dx
+                + dot(jump(phi,n), (un('+')*rhonph('+') - un('-')*rhonph('-')))*dS )
+                )
 
-#q=theta
-theta_eqn(xi) = (
+def theta_eqn(chi):
+    return (chi*(thetanp1 - thetan)*dx + dT* (inner(outer(chi, ubar), grad(thetanph))*dx
+                    + dot(jump(chi,n), (un('+')*thetanph('+') - un('-')*thetanph('-')))*dS
+                    - (inner(chi('+'), dot(ubar('+'), n('+'))*thetanph('+'))
+                      + inner(chi('-'), dot(ubar('-'), n('-'))*thetanph('-')))*dS )
+                 )
 
-inner(outer(self.test, self.ubar), grad(q))*dx
-+= dot(jump(self.test), (un('+')*q('+')
-                                       - un('-')*q('-')))*self.dS#-= (inner(self.test('+'),
-                            dot(self.ubar('+'), n('+'))*q('+'))
-                      + inner(self.test('-'),
-                              dot(self.ubar('-'), n('-'))*q('-')))*self.dS
-)
-#rhoeqn = AdvectionEquation(state, Vr, equation_form="continuity")
+w, phi, chi, gammar = TestFunctions(W)
+gamma = Constant(1000.0)
+eqn = u_eqn(w, gammar) + theta_eqn(chi) + rho_eqn(phi) + gamma * rho_eqn(div(w))
+
+nprob = NonlinearVariationalProblem(eqn, Unp1)
+
+
+
+
+
+luparams = {'snes_monitor':None,
+    'mat_type':'aij',
+    'ksp_type':'preonly',
+    'pc_type':'lu',
+    'pc_factor_mat_solver_type':'mumps'}
+
+sparameters = {
+    "mat_type":"matfree",
+    'snes_monitor': None,
+    "ksp_type": "fgmres",
+    "ksp_gmres_modifiedgramschmidt": None,
+    'ksp_monitor': None,
+    "ksp_rtol": 1e-8,
+    "pc_type": "fieldsplit",
+    "pc_fieldsplit_type": "schur",
+    "pc_fieldsplit_0_fields": "0,2,3",
+    "pc_fieldsplit_1_fields": "1",
+    "pc_fieldsplit_schur_fact_type": "full",
+    "pc_fieldsplit_off_diag_use_amat": True,
+}
+
+
+bottomright = {
+    "ksp_type": "gmres",
+    "ksp_max_it": 3,
+    "pc_type": "python",
+    "pc_python_type": "firedrake.MassInvPC",
+    "Mp_pc_type": "bjacobi",
+    "Mp_sub_pc_type": "ilu"
+}
+
+sparameters["fieldsplit_1"] = bottomright
+
+topleft_LU = {
+    "ksp_type": "preonly",
+    "pc_type": "python",
+    "pc_python_type": "firedrake.AssembledPC",
+    "assembled_pc_type": "lu",
+    "assembled_pc_factor_mat_solver_type": "mumps"
+}
+
+topleft_LS = {
+    'ksp_type': 'preonly',
+    'pc_type': 'python',
+    "pc_python_type": "firedrake.AssembledPC",
+    'assembled_pc_type': 'python',
+    'assembled_pc_python_type': 'firedrake.ASMStarPC',
+    "assembled_pc_star_sub_pc_type": "lu",
+    'assembled_pc_star_dims': '0',
+    'assembled_pc_star_sub_pc_factor_mat_solver_type' : 'mumps'
+    #'assembled_pc_linesmooth_star': '1'
+}
+
+sparameters["fieldsplit_0"] = topleft_LU
+
+nsolver = NonlinearVariationalSolver(nprob, solver_parameters=sparameters)
+
+name = "Results/compEuler/euler_semi_imp"
+file_gw = File(name+'.pvd')
+un, rhon, thetan, lamdan = Un.split()
+file_gw.write(un, rhon, thetan)
+Unp1.assign(Un)
+
+dt = 600.
+dumpt = 600.
+tdump = 0.
+dT.assign(dt)
+tmax = 3600.
+
+
+print('tmax', tmax, 'dt', dt)
+t = 0.
+while t < tmax - 0.5*dt:
+    print(t)
+    t += dt
+    tdump += dt
+
+    nsolver.solve()
+    Un.assign(Unp1)
+
+    if tdump > dumpt - dt*0.5:
+        file_gw.write(un, rhon, thetan)
+        tdump -= dumpt
+
 
