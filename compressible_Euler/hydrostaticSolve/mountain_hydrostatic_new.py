@@ -360,8 +360,11 @@ compressible_hydrostatic_balance(parameters, theta_b, rho_b, Pi,
 
 
 #initialise functions
+Vv, Vp, Vt, Vtr = build_spaces(mesh, vertical_degree=0, horizontal_degree=0)
+W = Vv*Vp*Vt*Vtr
+
 theta0 = Function(Vt).interpolate(theta_b)
-rho0 = Function(Vp).interpolate(rho_b) # where rho_b solves the hzdrostatic balance eq.
+rho0 = Function(Vp).interpolate(rho_b) # where rho_b solves the hydrostatic balance eq.
 u0 = Function(Vv).project(as_vector([20.0, 0.0]))
 
 def remove_initial_w(u, Vv):
@@ -389,6 +392,9 @@ un.assign(u0)
 rhon.assign(rho0)
 thetan.assign(theta0)
 
+print("rho max", rho0.dat.data.max())
+print("theta max", theta0.dat.data.max())
+
 #bn.interpolate(fd.sin(fd.pi*z/H)/(1+(x-xc)**2/a**2))
 #bn.interpolate(fd.Constant(0.0001))
 
@@ -404,21 +410,21 @@ rhonph = 0.5*(rhon + rhonp1)
 #Ubar = fd.as_vector([U, 0])-
 ubar = unph
 n = FacetNormal(mesh)
-unn = 0.5*(dot(ubar, n) + abs(dot(ubar, n)))
+unn = 0.5*(dot(unph, n) + abs(dot(unph, n)))
 
 Pin = thermodynamics_pi(parameters, rhon, thetan)
 Pinp1 = thermodynamics_pi(parameters, rhonp1, thetanp1)
 Pinph = 0.5*(Pin + Pinp1)
 ################################################################
 
-Upwind = 0.5*(sign(dot(ubar, n))+1)
+Upwind = 0.5*(sign(dot(unph, n))+1)
 
 perp_u_upwind = lambda q: Upwind('+')*perp(q('+')) + Upwind('-')*perp(q('-'))
 
 
 def uadv_eq(w):
-    return( -inner(perp(grad(inner(w, perp(ubar)))), ubar)*dx
-                     - inner(jump(  inner(w, perp(ubar)), n), perp_u_upwind(ubar))*dS
+    return( -inner(perp(grad(inner(w, perp(unph)))), unph)*dx
+                     - inner(jump(  inner(w, perp(unph)), n), perp_u_upwind(unph))*dS
              )
 #add boundary surface terms/BC
 def u_eqn(w, gammar):
@@ -432,18 +438,18 @@ def u_eqn(w, gammar):
                  )
 
 #check signs everywhere
-unn = 0.5*(dot(ubar, n) + abs(dot(ubar, n)))
+unn = 0.5*(dot(unph, n) + abs(dot(unph, n)))
 #q=rho
 def rho_eqn(phi):
-    return ( phi*(rhonp1 - rhon)*dx - dT * (inner(grad(phi), outer(rhonph, ubar))*dx
+    return ( phi*(rhonp1 - rhon)*dx - dT * (inner(grad(phi), outer(rhonph, unph))*dx
                 + dot(jump(phi,n), (un('+')*rhonph('+') - un('-')*rhonph('-')))*dS )
                 )
 
 def theta_eqn(chi):
-    return (chi*(thetanp1 - thetan)*dx + dT* (inner(outer(chi, ubar), grad(thetanph))*dx
+    return (chi*(thetanp1 - thetan)*dx + dT* (inner(outer(chi, unph), grad(thetanph))*dx
                     + dot(jump(chi,n), (un('+')*thetanph('+') - un('-')*thetanph('-')))*dS
-                    - (inner(chi('+'), dot(ubar('+'), n('+'))*thetanph('+'))
-                      + inner(chi('-'), dot(ubar('-'), n('-'))*thetanph('-')))*dS )
+                    - (inner(chi('+'), dot(unph('+'), n('+'))*thetanph('+'))
+                      + inner(chi('-'), dot(unph('-'), n('-'))*thetanph('-')))*dS )
                  )
 
 w, phi, chi, gammar = TestFunctions(W)
@@ -478,16 +484,6 @@ sparameters = {
 }
 
 
-bottomright = {
-    "ksp_type": "gmres",
-    "ksp_max_it": 3,
-    "pc_type": "python",
-    "pc_python_type": "firedrake.MassInvPC",
-    "Mp_pc_type": "bjacobi",
-    "Mp_sub_pc_type": "ilu"
-}
-
-sparameters["fieldsplit_1"] = bottomright
 
 topleft_LU = {
     "ksp_type": "preonly",
@@ -508,8 +504,19 @@ topleft_LS = {
     'assembled_pc_star_sub_pc_factor_mat_solver_type' : 'mumps'
     #'assembled_pc_linesmooth_star': '1'
 }
+bottomright = {
+    "ksp_type": "gmres",
+    "ksp_max_it": 3,
+    "pc_type": "python",
+    "pc_python_type": "firedrake.MassInvPC",
+    "Mp_pc_type": "bjacobi",
+    "Mp_sub_pc_type": "ilu"
+}
 
-sparameters["fieldsplit_0"] = topleft_LU
+sparameters["fieldsplit_1"] = bottomright
+
+
+sparameters["fieldsplit_0"] = topleft_LS
 
 nsolver = NonlinearVariationalSolver(nprob, solver_parameters=sparameters)
 
