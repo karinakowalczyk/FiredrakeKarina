@@ -415,6 +415,7 @@ unn = 0.5*(dot(unph, n) + abs(dot(unph, n)))
 Pin = thermodynamics_pi(parameters, rhon, thetan)
 Pinp1 = thermodynamics_pi(parameters, rhonp1, thetanp1)
 Pinph = 0.5*(Pin + Pinp1)
+
 ################################################################
 
 Upwind = 0.5*(sign(dot(unph, n))+1)
@@ -429,11 +430,11 @@ def uadv_eq(w):
 #add boundary surface terms/BC
 def u_eqn(w, gammar):
     return ( inner(w, unp1 - un)*dx + dT* (uadv_eq(w) - div(w*thetanph)* Pinph*dx
-                + jump(thetanph*w, n)*lamdanp1*dS_h # add boundary terms
+                + jump(thetanph*w, n)*lamdanp1('+')*dS_h # add boundary terms
                 + inner(thetanph*w, n)*lamdanp1*(ds_t + ds_b) # add boundary terms
-                + jump(thetanph*w, n)*Pinph*dS_v
-                + gammar*jump(unph,n)*dS_h # add boundary terms
-                + gammar*inner(unph,n)*(ds_t + ds_b)
+                + jump(thetanph*w, n)*(0.5(Pinph('+') + Pinph('-')))*dS_v
+                + gammar('+')*jump(unp1,n)*dS_h # add boundary terms
+                + gammar*inner(unp1,n)*(ds_t + ds_b)
                 + g * inner(w,zvec)*dx)
                  )
 
