@@ -432,7 +432,7 @@ def u_eqn(w, gammar):
     return ( inner(w, unp1 - un)*dx + dT* (uadv_eq(w) - div(w*thetanph)* Pinph*dx
                 + jump(thetanph*w, n)*lamdanp1('+')*dS_h # add boundary terms
                 + inner(thetanph*w, n)*lamdanp1*(ds_t + ds_b) # add boundary terms
-                + jump(thetanph*w, n)*(0.5(Pinph('+') + Pinph('-')))*dS_v
+                + jump(thetanph*w, n)*(0.5*(Pinph('+') + Pinph('-')))*dS_v
                 + gammar('+')*jump(unp1,n)*dS_h # add boundary terms
                 + gammar*inner(unp1,n)*(ds_t + ds_b)
                 + g * inner(w,zvec)*dx)
