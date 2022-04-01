@@ -267,7 +267,7 @@ m = PeriodicIntervalMesh(columns, L)
 
 # build volume mesh
 H = 50000.  # Height position of the model top
-ext_mesh = ExtrudedMesh(m, layers=nlayers, layer_height=H/nlayers)
+ext_mesh = ExtrudedMesh(m, layers=nlayers, layer_height=H/nlayers)git
 Vc = VectorFunctionSpace(ext_mesh, "DG", 2)
 coord = SpatialCoordinate(ext_mesh)
 x = Function(Vc).interpolate(as_vector([coord[0], coord[1]]))
