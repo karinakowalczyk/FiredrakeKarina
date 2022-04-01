@@ -126,6 +126,7 @@ def u_eqn(w, gammar):
 w, phi, q, gammar = fd.TestFunctions(W)
 gamma = fd.Constant(1000.0)
 eqn = u_eqn(w, gammar) + theta_eqn(q) + pi_eqn(phi) + gamma*pi_eqn(fd.div(w))
+assemble(eqn)
 
 nprob = fd.NonlinearVariationalProblem(eqn, Unp1)
 
@@ -216,7 +217,7 @@ name = "Results/MountainFlow/gw_imp"
 file_gw = fd.File(name+'.pvd')
 un, Pin, bn, lamdan = Un.split()
 file_gw.write(un, Pin, bn)
-Unp1.assign(Un)
+
 
 dt = 600.
 dumpt = 600.

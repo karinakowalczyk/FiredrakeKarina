@@ -381,7 +381,7 @@ class SUPGAdvection(AdvectionEquation):
             tau = supg_params.tau
             assert as_ufl(tau).ufl_shape == (dim, dim), "Provided tau has incorrect shape!"
         else:
-            # create tuple of default values of size dim
+            # create tuple of default value(s of size dim
             dt = state.timestepping.dt
             default_vals = [supg_params.default*dt]*dim
             # check for directions is which the space is discontinuous
@@ -404,12 +404,12 @@ class SUPGAdvection(AdvectionEquation):
         self.test += dtest
 
 
-class VectorInvariant(TransportEquation):
+class VectoraInvariant(TransportEquation):
     """
     Class defining the vector invariant form of the vector advection equation.
 
     :arg state: :class:`.State` object.
-    :arg V: Function space
+    :arg V: Function spce
     :arg ibp: (optional) string, stands for 'integrate by parts' and can
               take the value None, "once" or "twice". Defaults to "once".
     :arg solver_params: (optional) dictionary of solver parameters to pass to the
@@ -454,7 +454,7 @@ class VectorInvariant(TransportEquation):
             if self.ibp == IntegrateByParts.ONCE:
                 L = (
                     -inner(perp(grad(inner(self.test, perp(self.ubar)))), q)*dx
-                    - inner(jump(inner(self.test, perp(self.ubar)), n),
+                    - inner(jump(  inner(self.test, perp(self.ubar)), n),
                             perp_u_upwind(q))*self.dS
                 )
             else:

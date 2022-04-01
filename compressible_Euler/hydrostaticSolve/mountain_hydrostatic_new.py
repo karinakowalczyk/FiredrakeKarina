@@ -59,7 +59,7 @@ def build_spaces(mesh, vertical_degree, horizontal_degree):
         DG1_elt = TensorProductElement(DG1_hori_elt, DG1_vert_elt)
         DG1_space = FunctionSpace(mesh, DG1_elt, name = "DG1")
 
-        W_hydrostatic = MixedFunctionSpace((Vv, V1, T))
+        #W_hydrostatic = MixedFunctionSpace((Vv, V1, T))
 
         # EDIT: return full spaces for full equations later
 
@@ -99,7 +99,7 @@ def thermodynamics_rho(parameters, theta_v, pi):
     return p_0 * pi ** (1 / kappa - 1) / (R_d * theta_v)
 
 
-def compressible_hydrostatic_balance(parameters, theta0, rho0, pi0=None,
+def compressible_hydrostatic_balance(parameters, theta0, rho0, lambdar0, pi0=None,
                                      top=False, pi_boundary=Constant(1.0),
                                      water_t=None,
                                      solve_for_rho=False,
@@ -249,15 +249,19 @@ def compressible_hydrostatic_balance(parameters, theta0, rho0, pi0=None,
         print("rho max", rho0.dat.data.max())
     else:
         rho0.interpolate(thermodynamics_rho(parameters, theta0, Pi))
-
+    lambdar0.assign(lambdar)
 #######################################################################################################
 
+##set up mesh and parameters for main computations
+
 parameters = Parameters()
+g = parameters.g
+c_p = parameters.cp
 
 dT = Constant(0)
 
 nlayers = 100
-columns = 200
+columns = 120
 L = 240000.
 m = PeriodicIntervalMesh(columns, L)
 
@@ -272,20 +276,16 @@ xc = L/2.
 x, z = SpatialCoordinate(ext_mesh)
 hm = 1.
 zs = hm*a**2/((x-xc)**2 + a**2)
-
 xexpr = as_vector([x, z + ((H-z)/H)*zs])
 
 new_coords = Function(Vc).interpolate(xexpr)
 mesh = Mesh(new_coords)
 
-
-
-g = parameters.g
-c_p = parameters.cp
-
+# set up fem spaces
 Vv, Vp, Vt, Vtr = build_spaces(mesh, vertical_degree=1, horizontal_degree=1)
 W = Vv*Vp*Vt*Vtr
-# Hydrostatic case: Isothermal with T = 250
+
+# Hydrostatic case: Isothermal with T = 250, define background temperature
 Tsurf = 250.
 N = g/sqrt(c_p*Tsurf)
 
@@ -294,9 +294,11 @@ x,z = SpatialCoordinate(mesh)
 thetab = Tsurf*exp(N**2*z/g)
 theta_b = Function(Vt).interpolate(thetab)
 
-# Calculate hydrostatic Pi
+# Calculate hydrostatic Pi and rho by solving compressible balance equation, to be used as initial guess for the
+# full solver later
 Pi = Function(Vp)
 rho_b = Function(Vp)
+lambdarb = Function(Vtr)
 
 ## specify solver parameters
 scpc_parameters = {"ksp_type": "preonly", "pc_type": "lu"}
@@ -318,7 +320,7 @@ piparams_exact = {"ksp_type": "preonly",
                   'pc_factor_mat_solver_type':'mumps'
                   }
 
-compressible_hydrostatic_balance(parameters, theta_b, rho_b, Pi,
+compressible_hydrostatic_balance(parameters, theta_b, rho_b, lambdarb, Pi,
                                  top=True, pi_boundary=0.5,
                                  params=piparamsSCPC)
 
@@ -344,7 +346,7 @@ static void minify(double *a, double *b) {
 
 p0 = minimum(Pi)
 
-compressible_hydrostatic_balance(parameters, theta_b, rho_b, Pi,
+compressible_hydrostatic_balance(parameters, theta_b, rho_b, lambdarb, Pi,
                                  top=True, params=piparamsSCPC)
 p1 = minimum(Pi)
 alpha = 2.*(p1-p0)
@@ -354,18 +356,17 @@ pi_top = (1.-beta)/alpha
 print("SOLVE FOR RHO NOW")
 
 #rho_b to be used later as initial guess for solving Euler equations
-compressible_hydrostatic_balance(parameters, theta_b, rho_b, Pi,
+compressible_hydrostatic_balance(parameters, theta_b, rho_b, lambdarb, Pi,
                                      top=True, pi_boundary=pi_top, solve_for_rho=True,
                                      params=piparamsSCPC)
 
 
 #initialise functions
-Vv, Vp, Vt, Vtr = build_spaces(mesh, vertical_degree=0, horizontal_degree=0)
-W = Vv*Vp*Vt*Vtr
 
 theta0 = Function(Vt).interpolate(theta_b)
 rho0 = Function(Vp).interpolate(rho_b) # where rho_b solves the hydrostatic balance eq.
 u0 = Function(Vv).project(as_vector([20.0, 0.0]))
+lambdar0 = Function(Vtr).assign(lambdarb) # we use lambda from hzdrostatic solve as initial guess
 
 def remove_initial_w(u, Vv):
     bc = DirichletBC(u.function_space()[0], 0.0, "bottom")
@@ -386,11 +387,12 @@ Unp1 = Function(W)
 
 x, z = SpatialCoordinate(mesh)
 
-un, rhon, thetan, lamdar = Un.split()
+un, rhon, thetan, lambdarn = Un.split()
 
 un.assign(u0)
 rhon.assign(rho0)
 thetan.assign(theta0)
+lambdarn.assign(lambdar0)
 
 print("rho max", rho0.dat.data.max())
 print("theta max", theta0.dat.data.max())
@@ -429,18 +431,19 @@ def uadv_eq(w):
              )
 #add boundary surface terms/BC
 def u_eqn(w, gammar):
-    return ( inner(w, unp1 - un)*dx + dT* (uadv_eq(w) - div(w*thetanph)* Pinph*dx
-                + jump(thetanph*w, n)*lamdanp1('+')*dS_h # add boundary terms
-                + inner(thetanph*w, n)*lamdanp1*(ds_t + ds_b) # add boundary terms
-                + jump(thetanph*w, n)*(0.5*(Pinph('+') + Pinph('-')))*dS_v
-                + gammar('+')*jump(unp1,n)*dS_h # add boundary terms
-                + gammar*inner(unp1,n)*(ds_t + ds_b)
+    return ( inner(w, unp1 - un)*dx + dT* (uadv_eq(w) - c_p*div(w*thetanph)* Pinph*dx
+                + c_p*jump(thetanph*w, n)*lamdanp1('+')*dS_h # add boundary terms
+                + c_p*inner(thetanph*w, n)*lamdanp1*(ds_t + ds_b) # add boundary terms
+                + c_p*jump(thetanph*w, n)*(0.5*(Pinph('+') + Pinph('-')))*dS_v
+                + gammar('+')*jump(unp1,n)*dS_h # cp?
+                + gammar*inner(unp1,n)*(ds_t + ds_b)#cp?
                 + g * inner(w,zvec)*dx)
                  )
 
 #check signs everywhere
 unn = 0.5*(dot(unph, n) + abs(dot(unph, n)))
 #q=rho
+dS = dS_h + dS_v
 def rho_eqn(phi):
     return ( phi*(rhonp1 - rhon)*dx - dT * (inner(grad(phi), outer(rhonph, unph))*dx
                 + dot(jump(phi,n), (un('+')*rhonph('+') - un('-')*rhonph('-')))*dS )
@@ -527,11 +530,11 @@ un, rhon, thetan, lamdan = Un.split()
 file_gw.write(un, rhon, thetan)
 Unp1.assign(Un)
 
-dt = 600.
-dumpt = 600.
+dt = 5.
+dumpt = 5.
 tdump = 0.
 dT.assign(dt)
-tmax = 3600.
+tmax = 15000.
 
 
 print('tmax', tmax, 'dt', dt)

@@ -207,7 +207,6 @@ def remove_initial_w(u, Vv):
     uin = Function(u.function_space()).assign(u - ustar)
     u.assign(uin)
 
-
 def eady_initial_v(state, p0, v):
     f = state.parameters.f
     x, y, z = SpatialCoordinate(state.mesh)

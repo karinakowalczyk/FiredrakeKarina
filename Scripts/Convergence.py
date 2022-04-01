@@ -239,4 +239,3 @@ axes.legend()
 fig.savefig("../Results/errors.png")
 plt.show()
 
-K
