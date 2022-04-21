@@ -36,7 +36,7 @@ def build_spaces(mesh, vertical_degree, horizontal_degree):
         V2t_elt = TensorProductElement(S2, T0)
         V3_elt = TensorProductElement(S2, T1)
         V2v_elt = HDiv(V2t_elt)
-        V2_elt = V2h_elt + V2v_elt
+
 
         V2v_elt_Broken = BrokenElement(HDiv(V2t_elt))
         V2_elt = EnrichedElement(V2h_elt, V2v_elt_Broken)
@@ -63,7 +63,7 @@ def build_spaces(mesh, vertical_degree, horizontal_degree):
 
         # EDIT: return full spaces for full equations later
 
-        return (Vv, V1, V2, T)
+        return (V0, Vv, V1, V2, T)
 
 
 def thermodynamics_pi(parameters, rho, theta_v):
@@ -123,7 +123,7 @@ def compressible_hydrostatic_balance(parameters, theta0, rho0, lambdar0, pi0=Non
     #VDG = state.spaces("DG")
     #Vv = state.spaces("Vv")
     #Vtr= state.spaces("Trace")
-    Vv, Vp, Vt, Vtr = build_spaces(mesh, vertical_degree=1, horizontal_degree=1) # arguments to be set in main function
+    _, Vv, Vp, Vt, Vtr = build_spaces(mesh, vertical_degree=1, horizontal_degree=1) # arguments to be set in main function
     W = MixedFunctionSpace((Vv, Vp, Vtr))
     v, pi, lambdar = TrialFunctions(W)
     dv, dpi, gammar = TestFunctions(W)
@@ -161,6 +161,7 @@ def compressible_hydrostatic_balance(parameters, theta0, rho0, lambdar0, pi0=Non
     )
 
     arhs = -cp*inner(dv, n)*theta*pi_boundary*bmeasure
+    arhs += gammar * pi_boundary*bmeasure
 
     # Possibly make g vary with spatial coordinates?
 
@@ -237,8 +238,9 @@ def compressible_hydrostatic_balance(parameters, theta0, rho0, lambdar0, pi0=Non
             + dpi*div(theta0*v)*dx
             + cp*inner(dv, n)*theta*pi_boundary*bmeasure
 
-            + gammar * lambdar * bmeasure
+            + gammar * (lambdar - pi_boundary) * bmeasure
         )
+
         F += g*inner(dv, k)*dx
         rhoproblem = NonlinearVariationalProblem(F, w1, bcs=bcs)
         rhosolver = NonlinearVariationalSolver(rhoproblem, solver_parameters=params,
@@ -260,14 +262,14 @@ c_p = parameters.cp
 
 dT = Constant(0)
 
-nlayers = 100
-columns = 120
+nlayers = 5
+columns = 10
 L = 240000.
 m = PeriodicIntervalMesh(columns, L)
 
 # build volume mesh
 H = 50000.  # Height position of the model top
-ext_mesh = ExtrudedMesh(m, layers=nlayers, layer_height=H/nlayers)git
+ext_mesh = ExtrudedMesh(m, layers=nlayers, layer_height=H/nlayers)
 Vc = VectorFunctionSpace(ext_mesh, "DG", 2)
 coord = SpatialCoordinate(ext_mesh)
 x = Function(Vc).interpolate(as_vector([coord[0], coord[1]]))
@@ -282,8 +284,8 @@ new_coords = Function(Vc).interpolate(xexpr)
 mesh = Mesh(new_coords)
 
 # set up fem spaces
-Vv, Vp, Vt, Vtr = build_spaces(mesh, vertical_degree=1, horizontal_degree=1)
-W = Vv*Vp*Vt*Vtr
+V0, _, Vp, Vt, Vtr = build_spaces(mesh, vertical_degree=1, horizontal_degree=1)
+W = V0*Vp*Vt*Vtr
 
 # Hydrostatic case: Isothermal with T = 250, define background temperature
 Tsurf = 250.
@@ -365,18 +367,13 @@ compressible_hydrostatic_balance(parameters, theta_b, rho_b, lambdarb, Pi,
 
 theta0 = Function(Vt).interpolate(theta_b)
 rho0 = Function(Vp).interpolate(rho_b) # where rho_b solves the hydrostatic balance eq.
-u0 = Function(Vv).project(as_vector([20.0, 0.0]))
+u0 = Function(V0).project(as_vector([20.0, 0.0]))
+File_test = File("Results/compEuler/testu0.pvd")
 lambdar0 = Function(Vtr).assign(lambdarb) # we use lambda from hzdrostatic solve as initial guess
+File_test.write(u0, theta0, rho0, lambdar0)
 
-def remove_initial_w(u, Vv):
-    bc = DirichletBC(u.function_space()[0], 0.0, "bottom")
-    bc.apply(u)
-    uv = Function(Vv).project(u)
-    ustar = Function(u.function_space()).project(uv)
-    uin = Function(u.function_space()).assign(u - ustar)
-    u.assign(uin)
-
-remove_initial_w(u0, Vv)
+File_test = File("Results/compEuler/testu0afterremove.pvd")
+File_test.write(u0)
 zvec = as_vector([0,1])
 n = FacetNormal(mesh)
 
@@ -390,12 +387,16 @@ x, z = SpatialCoordinate(mesh)
 un, rhon, thetan, lambdarn = Un.split()
 
 un.assign(u0)
+File_test = File("Results/compEuler/testun1.pvd")
+File_test.write(un)
+
 rhon.assign(rho0)
 thetan.assign(theta0)
 lambdarn.assign(lambdar0)
 
-print("rho max", rho0.dat.data.max())
-print("theta max", theta0.dat.data.max())
+print("rho max min", rhon.dat.data.max(),  rhon.dat.data.min())
+print("theta max", thetan.dat.data.max(), thetan.dat.data.min())
+print("lambda max", lambdarn.dat.data.max(), lambdarn.dat.data.min())
 
 #bn.interpolate(fd.sin(fd.pi*z/H)/(1+(x-xc)**2/a**2))
 #bn.interpolate(fd.Constant(0.0001))
@@ -403,6 +404,7 @@ print("theta max", theta0.dat.data.max())
 
 #The timestepping solver
 un, rhon, thetan, lamdan = split(Un)
+
 unp1, rhonp1, thetanp1, lamdanp1 = split(Unp1)
 
 unph = 0.5*(un + unp1)
@@ -423,20 +425,26 @@ Pinph = 0.5*(Pin + Pinp1)
 Upwind = 0.5*(sign(dot(unph, n))+1)
 
 perp_u_upwind = lambda q: Upwind('+')*perp(q('+')) + Upwind('-')*perp(q('-'))
+u_upwind = lambda q: Upwind('+')*q('+') + Upwind('-')*q('-')
+
 
 
 def uadv_eq(w):
     return( -inner(perp(grad(inner(w, perp(unph)))), unph)*dx
-                     - inner(jump(  inner(w, perp(unph)), n), perp_u_upwind(unph))*dS
+                     - inner(jump(  inner(w, perp(unph)), n), perp_u_upwind(unph))*(dS)
+                     #- inner(inner(w, perp(unph))* n, unph) * ( ds_t + ds_b )
+                     - 0.5 * inner(unph, unph) * div(w) * dx
+                     #+ 0.5 * inner(u_upwind(unph), u_upwind(unph)) * jump(w, n) * dS_h
              )
 #add boundary surface terms/BC
 def u_eqn(w, gammar):
     return ( inner(w, unp1 - un)*dx + dT* (uadv_eq(w) - c_p*div(w*thetanph)* Pinph*dx
-                + c_p*jump(thetanph*w, n)*lamdanp1('+')*dS_h # add boundary terms
-                + c_p*inner(thetanph*w, n)*lamdanp1*(ds_t + ds_b) # add boundary terms
-                + c_p*jump(thetanph*w, n)*(0.5*(Pinph('+') + Pinph('-')))*dS_v
-                + gammar('+')*jump(unp1,n)*dS_h # cp?
-                + gammar*inner(unp1,n)*(ds_t + ds_b)#cp?
+                + c_p*jump(thetanph*w, n)*lamdanp1('+')*dS_h
+                + c_p*inner(thetanph*w, n)*lamdanp1*(ds_t + ds_b)
+                + c_p*jump(thetanph*w, n)*(0.5*(Pinph('+') + Pinph('-')))*(dS_v)
+                #+ c_p * inner(thetanph * w, n) * Pinph * (ds_v)
+                + gammar('+')*jump(unp1,n)*dS_h
+                + gammar*inner(unp1,n)*(ds_t + ds_b)
                 + g * inner(w,zvec)*dx)
                  )
 
@@ -446,24 +454,28 @@ unn = 0.5*(dot(unph, n) + abs(dot(unph, n)))
 dS = dS_h + dS_v
 def rho_eqn(phi):
     return ( phi*(rhonp1 - rhon)*dx - dT * (inner(grad(phi), outer(rhonph, unph))*dx
-                + dot(jump(phi,n), (un('+')*rhonph('+') - un('-')*rhonph('-')))*dS )
+                + dot(jump(phi,n), (un('+')*rhonph('+') - un('-')*rhonph('-')))*dS
+               #+ dot(phi*unph,n) *ds_v
+                    )
                 )
+
 
 def theta_eqn(chi):
     return (chi*(thetanp1 - thetan)*dx + dT* (inner(outer(chi, unph), grad(thetanph))*dx
                     + dot(jump(chi,n), (un('+')*thetanph('+') - un('-')*thetanph('-')))*dS
                     - (inner(chi('+'), dot(unph('+'), n('+'))*thetanph('+'))
-                      + inner(chi('-'), dot(unph('-'), n('-'))*thetanph('-')))*dS )
+                      + inner(chi('-'), dot(unph('-'), n('-'))*thetanph('-')))*dS
+
+                    #+ dot(unph*chi,n)*thetanph * (ds_v + ds_t + ds_b)
+                    #- inner(chi*thetanph * unph, n)* (ds_v +  ds_t + ds_b)
                  )
+            )
 
 w, phi, chi, gammar = TestFunctions(W)
-gamma = Constant(1000.0)
-eqn = u_eqn(w, gammar) + theta_eqn(chi) + rho_eqn(phi) + gamma * rho_eqn(div(w))
+gamma = Constant(10000.0)
+eqn = u_eqn(w, gammar) + theta_eqn(chi) + rho_eqn(phi) # + gamma * rho_eqn(div(w))
 
 nprob = NonlinearVariationalProblem(eqn, Unp1)
-
-
-
 
 
 luparams = {'snes_monitor':None,
@@ -475,8 +487,10 @@ luparams = {'snes_monitor':None,
 sparameters = {
     "mat_type":"matfree",
     'snes_monitor': None,
+    "snes_converged_reason": None,
     "ksp_type": "fgmres",
     "ksp_gmres_modifiedgramschmidt": None,
+    "ksp_converged_reason": None,
     'ksp_monitor': None,
     "ksp_rtol": 1e-8,
     "pc_type": "fieldsplit",
@@ -487,7 +501,17 @@ sparameters = {
     "pc_fieldsplit_off_diag_use_amat": True,
 }
 
-
+sparameters_exact = { "mat_type": "aij",
+                   'snes_monitor': None,
+                   'snes_view': None,
+                   'snes_type' : 'ksponly',
+                   'ksp_monitor_true_residual': None,
+                   'snes_converged_reason': None,
+                   'ksp_converged_reason': None,
+                   "ksp_type" : "preonly",
+                   "pc_type" : "lu",
+                   "pc_factor_mat_solver_type": "mumps"
+                   }
 
 topleft_LU = {
     "ksp_type": "preonly",
@@ -522,16 +546,24 @@ sparameters["fieldsplit_1"] = bottomright
 
 sparameters["fieldsplit_0"] = topleft_LS
 
-nsolver = NonlinearVariationalSolver(nprob, solver_parameters=sparameters)
+nsolver = NonlinearVariationalSolver(nprob, solver_parameters=sparameters_exact)
 
-name = "Results/compEuler/euler_semi_imp"
+name = "Results/compEuler/full/euler_semi_imp"
 file_gw = File(name+'.pvd')
 un, rhon, thetan, lamdan = Un.split()
 file_gw.write(un, rhon, thetan)
 Unp1.assign(Un)
 
-dt = 5.
-dumpt = 5.
+name2 = "Results/compEuler/perturbations/euler_perturbations"
+file2 = File(name+'.pvd')
+
+un_pert = Function(V0).project(un - u0)
+rhon_pert = Function(Vp).interpolate(rhon - rho0)
+thetan_pert = Function(Vt).interpolate(thetan - theta0)
+file2.write(un_pert, rhon_pert, thetan_pert)
+
+dt = 1.
+dumpt = 1.
 tdump = 0.
 dT.assign(dt)
 tmax = 15000.
@@ -549,6 +581,7 @@ while t < tmax - 0.5*dt:
 
     if tdump > dumpt - dt*0.5:
         file_gw.write(un, rhon, thetan)
+        file2.write(un_pert, rhon_pert, thetan_pert)
         tdump -= dumpt
 
 
