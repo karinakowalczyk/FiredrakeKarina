@@ -365,15 +365,15 @@ compressible_hydrostatic_balance(parameters, theta_b, rho_b, lambdarb, Pi,
 
 #initialise functions
 
-theta0 = Function(Vt).interpolate(theta_b)
-rho0 = Function(Vp).interpolate(rho_b) # where rho_b solves the hydrostatic balance eq.
-u0 = Function(V0).project(as_vector([20.0, 0.0]))
+theta0 = Function(Vt, name="theta0").interpolate(theta_b)
+rho0 = Function(Vp, name="rho0").interpolate(rho_b) # where rho_b solves the hydrostatic balance eq.
+u0 = Function(V0, name="u0").project(as_vector([20.0, 0.0]))
 File_test = File("Results/compEuler/testu0.pvd")
-lambdar0 = Function(Vtr).assign(lambdarb) # we use lambda from hzdrostatic solve as initial guess
+#lambdar_guess = z-1
+#lambdar0 = Function(Vtr).assign(lambdar_guess)
+lambdar0 = Function(Vtr, name="lambda0").assign(lambdarb) # we use lambda from hzdrostatic solve as initial guess
 File_test.write(u0, theta0, rho0, lambdar0)
 
-File_test = File("Results/compEuler/testu0afterremove.pvd")
-File_test.write(u0)
 zvec = as_vector([0,1])
 n = FacetNormal(mesh)
 
@@ -387,16 +387,16 @@ x, z = SpatialCoordinate(mesh)
 un, rhon, thetan, lambdarn = Un.split()
 
 un.assign(u0)
-File_test = File("Results/compEuler/testun1.pvd")
-File_test.write(un)
-
 rhon.assign(rho0)
 thetan.assign(theta0)
 lambdarn.assign(lambdar0)
 
+File_test = File("Results/compEuler/testun1.pvd")
+File_test.write(un, rhon, thetan, lambdarn)
+
 print("rho max min", rhon.dat.data.max(),  rhon.dat.data.min())
-print("theta max", thetan.dat.data.max(), thetan.dat.data.min())
-print("lambda max", lambdarn.dat.data.max(), lambdarn.dat.data.min())
+print("theta max min", thetan.dat.data.max(), thetan.dat.data.min())
+print("lambda max min", lambdarn.dat.data.max(), lambdarn.dat.data.min())
 
 #bn.interpolate(fd.sin(fd.pi*z/H)/(1+(x-xc)**2/a**2))
 #bn.interpolate(fd.Constant(0.0001))
@@ -504,7 +504,7 @@ sparameters = {
 sparameters_exact = { "mat_type": "aij",
                    'snes_monitor': None,
                    'snes_view': None,
-                   'snes_type' : 'ksponly',
+                   #'snes_type' : 'ksponly',
                    'ksp_monitor_true_residual': None,
                    'snes_converged_reason': None,
                    'ksp_converged_reason': None,
@@ -546,14 +546,16 @@ sparameters["fieldsplit_1"] = bottomright
 
 sparameters["fieldsplit_0"] = topleft_LS
 
+
 nsolver = NonlinearVariationalSolver(nprob, solver_parameters=sparameters_exact)
 
 name = "Results/compEuler/full/euler_semi_imp"
 file_gw = File(name+'.pvd')
 un, rhon, thetan, lamdan = Un.split()
-file_gw.write(un, rhon, thetan)
+file_gw.write(un, rhon, thetan, lambdarn)
 Unp1.assign(Un)
 
+"""
 name2 = "Results/compEuler/perturbations/euler_perturbations"
 file2 = File(name+'.pvd')
 
@@ -561,12 +563,13 @@ un_pert = Function(V0).project(un - u0)
 rhon_pert = Function(Vp).interpolate(rhon - rho0)
 thetan_pert = Function(Vt).interpolate(thetan - theta0)
 file2.write(un_pert, rhon_pert, thetan_pert)
+"""
 
 dt = 1.
 dumpt = 1.
 tdump = 0.
 dT.assign(dt)
-tmax = 15000.
+tmax = 13.
 
 
 print('tmax', tmax, 'dt', dt)
@@ -580,8 +583,8 @@ while t < tmax - 0.5*dt:
     Un.assign(Unp1)
 
     if tdump > dumpt - dt*0.5:
-        file_gw.write(un, rhon, thetan)
-        file2.write(un_pert, rhon_pert, thetan_pert)
+        file_gw.write(un, rhon, thetan, lambdarn)
+        #file2.write(un_pert, rhon_pert, thetan_pert)
         tdump -= dumpt
 
 
