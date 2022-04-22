@@ -282,8 +282,8 @@ zs = hm*a**2/((x-xc)**2 + a**2)
 xexpr = as_vector([x, z + ((H-z)/H)*zs])
 
 new_coords = Function(Vc).interpolate(xexpr)
-#mesh = Mesh(new_coords)
-mesh=ext_mesh
+mesh = Mesh(new_coords)
+#mesh=ext_mesh
 
 """
 nlayers = 5  # horizontal layers
