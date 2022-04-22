@@ -262,6 +262,7 @@ c_p = parameters.cp
 
 dT = Constant(0)
 
+
 nlayers = 5
 columns = 10
 L = 240000.
@@ -273,15 +274,35 @@ ext_mesh = ExtrudedMesh(m, layers=nlayers, layer_height=H/nlayers)
 Vc = VectorFunctionSpace(ext_mesh, "DG", 2)
 coord = SpatialCoordinate(ext_mesh)
 x = Function(Vc).interpolate(as_vector([coord[0], coord[1]]))
-a = 10000.
+a = 10000000.
 xc = L/2.
 x, z = SpatialCoordinate(ext_mesh)
-hm = 1.
+hm = H/3.
 zs = hm*a**2/((x-xc)**2 + a**2)
 xexpr = as_vector([x, z + ((H-z)/H)*zs])
 
 new_coords = Function(Vc).interpolate(xexpr)
-mesh = Mesh(new_coords)
+#mesh = Mesh(new_coords)
+mesh=ext_mesh
+
+"""
+nlayers = 5  # horizontal layers
+columns = 10  # number of columns
+L = 3.0e5
+m = PeriodicIntervalMesh(columns, L)
+
+# build volume mesh
+H = 1.0e4  # Height position of the model top
+mesh = ExtrudedMesh(m, layers=nlayers, layer_height=H/nlayers)
+
+Vc = mesh.coordinates.function_space()
+x, y = SpatialCoordinate(mesh)
+profile = ((1000)**2)/((x-L/2)**2 + (1000)**2)
+f_mesh = Function(Vc).interpolate(as_vector([x, y + (profile * (1-y/H)) ] ) )
+#f_mesh = fd.Function(Vc).interpolate(fd.as_vector([x, 2*y] ))
+#f_mesh = fd.Function(Vc).interpolate(fd.as_vector([x,y - (1/H)*fd.exp(-x**2/2)*((y-0.5*H)**2 -0.25* H**2 )] ) )
+mesh.coordinates.assign(f_mesh)
+"""
 
 # set up fem spaces
 V0, _, Vp, Vt, Vtr = build_spaces(mesh, vertical_degree=1, horizontal_degree=1)
@@ -368,11 +389,20 @@ compressible_hydrostatic_balance(parameters, theta_b, rho_b, lambdarb, Pi,
 theta0 = Function(Vt, name="theta0").interpolate(theta_b)
 rho0 = Function(Vp, name="rho0").interpolate(rho_b) # where rho_b solves the hydrostatic balance eq.
 u0 = Function(V0, name="u0").project(as_vector([20.0, 0.0]))
+
 File_test = File("Results/compEuler/testu0.pvd")
 #lambdar_guess = z-1
 #lambdar0 = Function(Vtr).assign(lambdar_guess)
-lambdar0 = Function(Vtr, name="lambda0").assign(lambdarb) # we use lambda from hzdrostatic solve as initial guess
-File_test.write(u0, theta0, rho0, lambdar0)
+lambdar0 = Function(Vtr, name="lambdar0").assign(lambdarb) # we use lambda from hzdrostatic solve as initial guess
+File_test.write(u0, rho0, theta0, lambdar0)
+
+def applyBC(u):
+    bc = DirichletBC(u.function_space(), 0.0, "bottom")
+    bc.apply(u)
+
+#applyBC(u0)
+#File_test2 = File("Results/compEuler/testuafterBC.pvd")
+#File_test2.write(u0)
 
 zvec = as_vector([0,1])
 n = FacetNormal(mesh)
@@ -403,13 +433,13 @@ print("lambda max min", lambdarn.dat.data.max(), lambdarn.dat.data.min())
 
 
 #The timestepping solver
-un, rhon, thetan, lamdan = split(Un)
+un, rhon, thetan, lambdarn = split(Un)
 
-unp1, rhonp1, thetanp1, lamdanp1 = split(Unp1)
+unp1, rhonp1, thetanp1, lambdarnp1 = split(Unp1)
 
 unph = 0.5*(un + unp1)
 thetanph = 0.5*(thetan + thetanp1)
-lamdanph = 0.5*(lamdan + lamdanp1)
+lambdarnph = 0.5*(lambdarn + lambdarnp1)
 rhonph = 0.5*(rhon + rhonp1)
 #Ubar = fd.as_vector([U, 0])-
 ubar = unph
@@ -438,37 +468,40 @@ def uadv_eq(w):
              )
 #add boundary surface terms/BC
 def u_eqn(w, gammar):
-    return ( inner(w, unp1 - un)*dx + dT* (uadv_eq(w) - c_p*div(w*thetanph)* Pinph*dx
-                + c_p*jump(thetanph*w, n)*lamdanp1('+')*dS_h
-                + c_p*inner(thetanph*w, n)*lamdanp1*(ds_t + ds_b)
+    return ( inner(w, unp1 - un)*dx + dT* (
+                uadv_eq(w) 
+                - c_p*div(w*thetanph)* Pinph*dx
+                + c_p*jump(thetanph*w, n)*lambdarnp1('+')*dS_h
+                + c_p*inner(thetanph*w, n)*lambdarnp1*(ds_t + ds_b)
                 + c_p*jump(thetanph*w, n)*(0.5*(Pinph('+') + Pinph('-')))*(dS_v)
                 #+ c_p * inner(thetanph * w, n) * Pinph * (ds_v)
-                + gammar('+')*jump(unp1,n)*dS_h
-                + gammar*inner(unp1,n)*(ds_t + ds_b)
+                + gammar('+')*jump(unph,n)*dS_h
+                + gammar*inner(unph,n)*(ds_t + ds_b)
                 + g * inner(w,zvec)*dx)
-                 )
+                )
 
 #check signs everywhere
 unn = 0.5*(dot(unph, n) + abs(dot(unph, n)))
 #q=rho
 dS = dS_h + dS_v
 def rho_eqn(phi):
-    return ( phi*(rhonp1 - rhon)*dx - dT * (inner(grad(phi), outer(rhonph, unph))*dx
-                + dot(jump(phi,n), (un('+')*rhonph('+') - un('-')*rhonph('-')))*dS
-               #+ dot(phi*unph,n) *ds_v
+    return ( phi*(rhonp1 - rhon)*dx 
+                + dT * (-inner(grad(phi), rhonph*unph)*dx
+                + (phi('+') - phi('-'))*(unn('+')*rhonph('+') - unn('-')*rhonph('-'))*dS
+                #+ dot(phi*unph,n) *ds_v
                     )
-                )
+            )
 
 
 def theta_eqn(chi):
-    return (chi*(thetanp1 - thetan)*dx + dT* (inner(outer(chi, unph), grad(thetanph))*dx
-                    + dot(jump(chi,n), (un('+')*thetanph('+') - un('-')*thetanph('-')))*dS
-                    - (inner(chi('+'), dot(unph('+'), n('+'))*thetanph('+'))
-                      + inner(chi('-'), dot(unph('-'), n('-'))*thetanph('-')))*dS
+    return (chi*(thetanp1 - thetan)*dx  
+                    + dT * (inner(chi*unph, grad(thetanph))*dx
+                    + (chi('+') - chi('-'))* (unn('+')*thetanph('+') - unn('-')*thetanph('-'))*dS
+                    - dot(chi('+')*thetanph('+')*unph('+'),  n('+'))*dS - inner(chi('-')*thetanph('-')*unph('-'), n('-'))*dS
 
                     #+ dot(unph*chi,n)*thetanph * (ds_v + ds_t + ds_b)
                     #- inner(chi*thetanph * unph, n)* (ds_v +  ds_t + ds_b)
-                 )
+                    )
             )
 
 w, phi, chi, gammar = TestFunctions(W)
@@ -549,9 +582,9 @@ sparameters["fieldsplit_0"] = topleft_LS
 
 nsolver = NonlinearVariationalSolver(nprob, solver_parameters=sparameters_exact)
 
-name = "Results/compEuler/full/euler_semi_imp"
+name = "Results/compEuler/final_initial"
 file_gw = File(name+'.pvd')
-un, rhon, thetan, lamdan = Un.split()
+un, rhon, thetan, lambdarn = Un.split()
 file_gw.write(un, rhon, thetan, lambdarn)
 Unp1.assign(Un)
 
@@ -565,11 +598,17 @@ thetan_pert = Function(Vt).interpolate(thetan - theta0)
 file2.write(un_pert, rhon_pert, thetan_pert)
 """
 
+name = "Results/compEuler/full/euler_semi_imp"
+file_gw = File(name+'.pvd')
+file_gw.write(un, rhon, thetan, lambdarn)
+Unp1.assign(Un)
+
+
 dt = 1.
 dumpt = 1.
 tdump = 0.
 dT.assign(dt)
-tmax = 13.
+tmax = 1000.
 
 
 print('tmax', tmax, 'dt', dt)
