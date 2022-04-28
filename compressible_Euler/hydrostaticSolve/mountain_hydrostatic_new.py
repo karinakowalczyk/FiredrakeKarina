@@ -263,8 +263,8 @@ c_p = parameters.cp
 dT = Constant(0)
 
 
-nlayers = 5
-columns = 10
+nlayers = 20
+columns = 80
 L = 240000.
 m = PeriodicIntervalMesh(columns, L)
 
@@ -385,7 +385,8 @@ compressible_hydrostatic_balance(parameters, theta_b, rho_b, lambdarb, Pi,
 
 
 #initialise functions
-
+thetab = Tsurf*exp(N**2*z/g) 
+theta_b = Function(Vt).interpolate(thetab)
 theta0 = Function(Vt, name="theta0").interpolate(theta_b)
 rho0 = Function(Vp, name="rho0").interpolate(rho_b) # where rho_b solves the hydrostatic balance eq.
 u0 = Function(V0, name="u0").project(as_vector([20.0, 0.0]))
@@ -536,7 +537,7 @@ sparameters = {
 
 sparameters_exact = { "mat_type": "aij",
                    'snes_monitor': None,
-                   'snes_view': None,
+                   #'snes_view': None,
                    #'snes_type' : 'ksponly',
                    'ksp_monitor_true_residual': None,
                    'snes_converged_reason': None,
@@ -588,42 +589,58 @@ un, rhon, thetan, lambdarn = Un.split()
 file_gw.write(un, rhon, thetan, lambdarn)
 Unp1.assign(Un)
 
-"""
-name2 = "Results/compEuler/perturbations/euler_perturbations"
-file2 = File(name+'.pvd')
 
-un_pert = Function(V0).project(un - u0)
-rhon_pert = Function(Vp).interpolate(rhon - rho0)
-thetan_pert = Function(Vt).interpolate(thetan - theta0)
+name2 = "Results/compEuler/perturbations/euler_perturbations"
+file2 = File(name2+'.pvd')
+
+un_pert = Function(V0)
+rhon_pert = Function(Vp)
+thetan_pert = Function(Vt)
+
+un_pert.assign(un - u0)
+rhon_pert.assign(rhon - rho0)
+thetan_pert.assign(thetan - theta0)
 file2.write(un_pert, rhon_pert, thetan_pert)
-"""
+
+
 
 name = "Results/compEuler/full/euler_semi_imp"
 file_gw = File(name+'.pvd')
 file_gw.write(un, rhon, thetan, lambdarn)
-Unp1.assign(Un)
 
 
-dt = 1.
-dumpt = 1.
+dt = 10.
+dumpt = 10.
 tdump = 0.
 dT.assign(dt)
-tmax = 1000.
+tmax = 200.
 
-
+un_copy = Function(V0).assign(un)
 print('tmax', tmax, 'dt', dt)
 t = 0.
+
+
 while t < tmax - 0.5*dt:
     print(t)
     t += dt
     tdump += dt
-
+    #print(a_help.dat.data.max())
+    #Un_copy.assign(Un)
     nsolver.solve()
+
+    
+    #print(max(A))
     Un.assign(Unp1)
 
+    
+
+
+    print("rho max min pert", rhon_pert.dat.data.max(),  rhon_pert.dat.data.min())
+    print("theta max min pert", thetan_pert.dat.data.max(), thetan_pert.dat.data.min())
+    
     if tdump > dumpt - dt*0.5:
         file_gw.write(un, rhon, thetan, lambdarn)
-        #file2.write(un_pert, rhon_pert, thetan_pert)
+        file2.write(un_pert, rhon_pert, thetan_pert)
         tdump -= dumpt
 
 
